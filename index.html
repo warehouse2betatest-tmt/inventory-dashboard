@@ -1100,9 +1100,6 @@
             
             const labels = Object.keys(dataMap).sort((a, b) => (dataMap[b].active+dataMap[b].nonActive) - (dataMap[a].active+dataMap[a].nonActive));
             
-            // Threshold logic to decide when to push label outside
-            // If value is less than 15% of the total row width, push it outside
-            
             chartInstances[name] = new Chart(ctx, {
                 type: 'bar',
                 data: {
@@ -1114,7 +1111,6 @@
                             backgroundColor: '#10b981', 
                             borderRadius: 4, 
                             stack: '1', 
-                            clip: false 
                         },
                         { 
                             label: 'Non-Active', 
@@ -1122,7 +1118,6 @@
                             backgroundColor: '#ef4444', 
                             borderRadius: 4, 
                             stack: '1', 
-                            clip: false 
                         }
                     ]
                 },
@@ -1130,56 +1125,45 @@
                     indexAxis: 'y', 
                     responsive: true, 
                     maintainAspectRatio: false,
-                    layout: { padding: { right: 130, top: 30, left: 20 } },
+                    layout: { padding: { right: 50, top: 30, left: 20 } },
                     scales: { 
-                        x: { stacked: true, display: false, graceful: '40%' }, 
+                        x: { stacked: true, display: false }, 
                         y: { stacked: true, grid: { display: false } } 
                     },
                     plugins: { 
-                        datalabels: { 
-                            formatter: (v, context) => {
-                                if (v <= 0) return '';
-                                const pct = total > 0 ? ((v * 1000 / total) * 100) : 0;
-                                return `${v.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} (${pct.toFixed(1)}%)`;
-                            },
-                            // Dynamic Color Logic
-                            color: (context) => {
-                                const value = context.dataset.data[context.dataIndex];
-                                const active = context.chart.data.datasets[0].data[context.dataIndex];
-                                const nonActive = context.chart.data.datasets[1].data[context.dataIndex];
-                                const rowTotal = active + nonActive;
-                                const pctOfRow = rowTotal > 0 ? (value / rowTotal) : 0;
-
-                                // If narrow bar (<15%), label is pushed 'end'.
-                                if (pctOfRow < 0.15) {
-                                    // If Active (Index 0) pushed end -> lands on Non-Active (Red) -> White Text
-                                    if (context.datasetIndex === 0 && nonActive > 0) return '#fff';
-                                    // If Non-Active (Index 1) pushed end -> lands on White BG -> Dark Text
-                                    // Or if Active pushed end but no Non-Active -> Lands on White BG -> Dark Text
-                                    return '#475569';
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    if (context.parsed.x !== null) {
+                                        label += context.parsed.x.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' Tons';
+                                    }
+                                    return label;
                                 }
-                                // Default: Inside Bar -> White Text
-                                return '#fff';
-                            },
-                            // Dynamic Anchor/Align Logic
-                            anchor: (context) => {
+                            }
+                        },
+                        legend: { display: true, position: 'top', align: 'end' },
+                        datalabels: { 
+                            display: (context) => {
                                 const value = context.dataset.data[context.dataIndex];
                                 const active = context.chart.data.datasets[0].data[context.dataIndex];
                                 const nonActive = context.chart.data.datasets[1].data[context.dataIndex];
                                 const rowTotal = active + nonActive;
-                                const pctOfRow = rowTotal > 0 ? (value / rowTotal) : 0;
-                                return (pctOfRow < 0.15) ? 'end' : 'center';
+                                if (rowTotal === 0) return false;
+                                const pctOfRow = value / rowTotal;
+                                // Hide label if bar segment is too small (less than 10%)
+                                return pctOfRow > 0.10; 
                             },
-                            align: (context) => {
-                                const value = context.dataset.data[context.dataIndex];
-                                const active = context.chart.data.datasets[0].data[context.dataIndex];
-                                const nonActive = context.chart.data.datasets[1].data[context.dataIndex];
-                                const rowTotal = active + nonActive;
-                                const pctOfRow = rowTotal > 0 ? (value / rowTotal) : 0;
-                                return (pctOfRow < 0.15) ? 'end' : 'center';
+                            formatter: (v, context) => {
+                                return v.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0});
                             },
-                            font: {size: 11, weight: 'bold'},
-                            offset: 4
+                            color: '#ffffff',
+                            anchor: 'center',
+                            align: 'center',
+                            font: {size: 11, weight: 'bold'}
                         } 
                     }
                 }
