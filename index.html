@@ -1,0 +1,1643 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inventory Management Dashboard</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Supabase JS Client -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- Chart.js & DataLabels Plugin -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700;900&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        slate: { 600: '#475569', 700: '#334155', 800: '#1e293b', 900: '#0f172a' },
+                        amber: { 400: '#fbbf24', 500: '#f59e0b', 600: '#d97706' },
+                        emerald: { 500: '#10b981' },
+                        blue: { 500: '#3b82f6' },
+                        red: { 500: '#ef4444' }
+                    },
+                    fontFamily: { sans: ['Sarabun', 'sans-serif'] },
+                    borderRadius: { 'xl': '12px', '2xl': '16px' }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body { font-family: 'Sarabun', sans-serif; }
+        #sidebar { transition: width 0.3s ease; }
+        .sidebar-text { transition: opacity 0.2s ease; white-space: nowrap; }
+        .collapsed .sidebar-text { opacity: 0; pointer-events: none; width: 0; }
+        .collapsed #sidebar-header { justify-content: center; }
+        .collapsed #sidebar-header h1 { display: none; }
+        .nav-item { transition: all 0.2s; border-left: 4px solid transparent; }
+        .nav-item.active { background-color: rgba(255, 255, 255, 0.08); border-left-color: #f59e0b; color: #ffffff; }
+        .nav-item:hover:not(.active) { background-color: rgba(255, 255, 255, 0.04); }
+        #progress-fill { transition: width 0.3s ease-in-out; }
+        .multiselect-dropdown { max-height: 250px; overflow-y: auto; scrollbar-width: thin; }
+        .multiselect-dropdown::-webkit-scrollbar { width: 6px; }
+        .multiselect-dropdown::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 3px; }
+        .table-container { max-height: 600px; overflow-y: auto; scrollbar-width: thin; }
+        .card-progress { transition: width 0.5s ease-in-out; }
+        .cursor-pointer-chart { cursor: pointer; }
+
+        /* Custom Input for Table Header */
+        .th-search-input {
+            width: 100%;
+            margin-top: 4px;
+            padding: 4px 8px;
+            border-radius: 6px;
+            border: 1px solid #cbd5e1;
+            font-size: 0.75rem;
+            color: #1e293b;
+            font-weight: normal;
+        }
+        .th-search-input::placeholder { color: #94a3b8; font-style: italic; }
+        .th-search-input:focus { outline: none; border-color: #f59e0b; ring: 2px solid #f59e0b; }
+        
+        /* Loading Animation for Bar */
+        @keyframes shimmer {
+            0% { background-position: 100% 0; }
+            100% { background-position: -100% 0; }
+        }
+        .animate-shimmer {
+            background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.4) 50%, rgba(255,255,255,0) 100%);
+            background-size: 200% 100%;
+            animation: shimmer 1.5s infinite;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 h-screen flex overflow-hidden text-slate-700 font-semibold">
+
+    <!-- SIDEBAR -->
+    <aside id="sidebar" class="bg-slate-900 text-white flex flex-col w-64 flex-shrink-0 z-30 shadow-xl relative transition-all duration-300">
+        <div id="sidebar-header" class="h-20 flex items-center px-6 bg-slate-800 border-b border-slate-700 overflow-hidden">
+            <div class="bg-amber-500 p-2 rounded-xl flex-shrink-0 mr-3 shadow-lg">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                </svg>
+            </div>
+            <h1 class="text-xl font-black tracking-wide sidebar-text text-white">Inventory App</h1>
+        </div>
+        <button onclick="toggleSidebar()" class="absolute -right-3 top-24 bg-amber-500 hover:bg-amber-600 text-white p-1.5 rounded-full shadow-lg border-2 border-slate-50 z-50 transform hover:scale-110 transition">
+            <svg id="toggle-icon" xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M15 19l-7-7 7-7" />
+            </svg>
+        </button>
+        <nav class="flex-1 overflow-y-auto py-6 space-y-2 px-3">
+            <button onclick="switchTab('aging')" id="btn-aging" class="nav-item active w-full flex items-center px-4 py-3.5 text-slate-300 rounded-xl">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                <span class="ml-3 font-bold sidebar-text">Aging Analysis</span>
+            </button>
+            <button onclick="switchTab('storage')" id="btn-storage" class="nav-item w-full flex items-center px-4 py-3.5 text-slate-300 rounded-xl">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
+                <span class="ml-3 font-bold sidebar-text">Storage Capacity</span>
+            </button>
+            <button onclick="switchTab('12l1')" id="btn-12l1" class="nav-item w-full flex items-center px-4 py-3.5 text-slate-300 rounded-xl">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                <span class="ml-3 font-bold sidebar-text">12L1 Overview</span>
+            </button>
+        </nav>
+        <div class="p-6 bg-slate-800 border-t border-slate-700">
+             <div id="status-indicator" class="flex items-center gap-3 text-xs font-bold text-slate-400">
+                <span class="w-2.5 h-2.5 rounded-full bg-slate-500"></span> 
+                <span class="sidebar-text truncate uppercase tracking-wider">รอการเชื่อมต่อ...</span>
+            </div>
+        </div>
+    </aside>
+
+    <!-- MAIN CONTENT -->
+    <div class="flex-1 flex flex-col h-screen overflow-hidden bg-slate-50">
+        <header class="bg-white/80 backdrop-blur-md shadow-sm h-20 flex items-center px-8 z-10 justify-between sticky top-0">
+            <h2 id="page-title" class="text-3xl font-black text-slate-800 tracking-tight">Aging Analysis</h2>
+            <div id="retry-badge" class="hidden bg-amber-100 text-amber-600 text-xs px-3 py-1.5 rounded-lg font-black uppercase tracking-wider animate-pulse shadow-sm border border-amber-200">Retrying Connection...</div>
+        </header>
+
+        <main class="flex-1 overflow-y-auto p-2 scroll-smooth">
+            <!-- AGING TAB -->
+            <div id="content-aging" class="tab-content block animate-fade-in pb-8">
+                <div class="sticky top-0 z-20 bg-slate-50/95 backdrop-blur-sm px-6 py-4 mb-6 transition-all">
+                    <div class="bg-white rounded-2xl shadow-lg p-6 border border-slate-100">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-sm font-black text-slate-400 uppercase flex items-center gap-2 tracking-wide">Filters</h3>
+                            <button onclick="clearAllFilters()" class="text-xs text-red-500 hover:text-red-700 font-bold underline flex items-center gap-1 transition-colors">Clear All</button>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-5 gap-6">
+                            <!-- Multi-Selects -->
+                            <div class="relative group" id="container-month">
+                                <label class="block text-xs font-bold text-slate-500 mb-2 uppercase tracking-wide">Month</label>
+                                <button onclick="toggleDropdown('month')" id="btn-month" class="w-full bg-slate-50 hover:bg-white border-2 border-slate-200 hover:border-amber-400 text-slate-700 text-sm font-bold rounded-xl text-left p-3 flex justify-between items-center"><span class="truncate">Select Months...</span></button>
+                                <div id="dropdown-month" class="hidden absolute top-full left-0 w-full bg-white border border-slate-200 rounded-xl shadow-xl z-50 mt-2 multiselect-dropdown p-2"></div>
+                            </div>
+                            <div class="relative group" id="container-period">
+                                <label class="block text-xs font-bold text-slate-500 mb-2 uppercase tracking-wide">Aging Period</label>
+                                <button onclick="toggleDropdown('period')" id="btn-period" class="w-full bg-slate-50 hover:bg-white border-2 border-slate-200 hover:border-amber-400 text-slate-700 text-sm font-bold rounded-xl text-left p-3 flex justify-between items-center"><span class="truncate">Select Periods...</span></button>
+                                <div id="dropdown-period" class="hidden absolute top-full left-0 w-full bg-white border border-slate-200 rounded-xl shadow-xl z-50 mt-2 multiselect-dropdown p-2"></div>
+                            </div>
+                            <div class="relative group" id="container-groupSale">
+                                <label class="block text-xs font-bold text-slate-500 mb-2 uppercase tracking-wide">Group Sale</label>
+                                <button onclick="toggleDropdown('groupSale')" id="btn-groupSale" class="w-full bg-slate-50 hover:bg-white border-2 border-slate-200 hover:border-amber-400 text-slate-700 text-sm font-bold rounded-xl text-left p-3 flex justify-between items-center"><span class="truncate">Select Group...</span></button>
+                                <div id="dropdown-groupSale" class="hidden absolute top-full left-0 w-full bg-white border border-slate-200 rounded-xl shadow-xl z-50 mt-2 multiselect-dropdown p-2"></div>
+                            </div>
+                            <div class="relative group" id="container-status">
+                                <label class="block text-xs font-bold text-slate-500 mb-2 uppercase tracking-wide">Status</label>
+                                <button onclick="toggleDropdown('status')" id="btn-status" class="w-full bg-slate-50 hover:bg-white border-2 border-slate-200 hover:border-amber-400 text-slate-700 text-sm font-bold rounded-xl text-left p-3 flex justify-between items-center"><span class="truncate">Select Status...</span></button>
+                                <div id="dropdown-status" class="hidden absolute top-full left-0 w-full bg-white border border-slate-200 rounded-xl shadow-xl z-50 mt-2 multiselect-dropdown p-2"></div>
+                            </div>
+                            <div class="relative group" id="container-sloc">
+                                <label class="block text-xs font-bold text-slate-500 mb-2 uppercase tracking-wide">Sloc.</label>
+                                <button onclick="toggleDropdown('sloc')" id="btn-sloc" class="w-full bg-slate-50 hover:bg-white border-2 border-slate-200 hover:border-amber-400 text-slate-700 text-sm font-bold rounded-xl text-left p-3 flex justify-between items-center"><span class="truncate">Select Sloc...</span></button>
+                                <div id="dropdown-sloc" class="hidden absolute top-full left-0 w-full bg-white border border-slate-200 rounded-xl shadow-xl z-50 mt-2 multiselect-dropdown p-2"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="px-8 pb-6">
+                    <!-- Key Metrics -->
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                        <div class="bg-white rounded-2xl shadow-lg p-6 border-l-8 border-blue-500">
+                            <p class="text-sm font-black text-slate-400 uppercase tracking-widest">Total Weight</p>
+                            <h3 id="aging-weight" class="text-4xl font-black text-slate-800 mt-2">0.00</h3>
+                            <p class="text-xs font-bold text-slate-400 mt-2">Tons</p>
+                        </div>
+                        <div class="bg-white rounded-2xl shadow-lg p-6 border-l-8 border-amber-500">
+                            <p class="text-sm font-black text-slate-400 uppercase tracking-widest">Total HU</p>
+                            <h3 id="aging-hu" class="text-4xl font-black text-slate-800 mt-2">0</h3>
+                            <p class="text-xs font-bold text-slate-400 mt-2">Units</p>
+                        </div>
+                        <div class="bg-white rounded-2xl shadow-lg p-6 border-l-8 border-emerald-500">
+                            <p class="text-sm font-black text-slate-400 uppercase tracking-widest">Materials</p>
+                            <h3 id="aging-mat" class="text-4xl font-black text-slate-800 mt-2">0</h3>
+                            <p class="text-xs font-bold text-slate-400 mt-2">Codes</p>
+                        </div>
+                    </div>
+
+                    <!-- Charts: Sloc & Aging Period -->
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                        <div class="bg-white rounded-2xl shadow-lg p-6">
+                            <h3 class="text-xl font-black text-slate-800 mb-6">Sloc Distribution (Tons)</h3>
+                            <div class="relative h-[400px] w-full"><canvas id="slocChart"></canvas></div>
+                        </div>
+                         <div class="bg-white rounded-2xl shadow-lg p-6">
+                            <h3 class="text-xl font-black text-slate-800 mb-6">Aging Period Comparison (Tons) - Using 'Day'</h3>
+                            <div class="relative h-[400px] w-full"><canvas id="agingPeriodChart"></canvas></div>
+                        </div>
+                    </div>
+
+                    <!-- Charts: Group Sale -->
+                    <div class="bg-white rounded-2xl shadow-lg p-6 mb-8">
+                        <h3 class="text-xl font-black text-slate-800 mb-6">Group Sale (Tons)</h3>
+                        <div class="relative h-[500px] w-full"><canvas id="agingChart"></canvas></div>
+                    </div>
+
+                    <!-- Charts: Product -->
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                        <div class="bg-white rounded-2xl shadow-lg p-6">
+                            <h3 class="text-xl font-black text-slate-800 mb-6">Group Product (Tons)</h3>
+                            <div class="relative h-[400px] w-full"><canvas id="groupProductChart"></canvas></div>
+                        </div>
+                        <div class="bg-white rounded-2xl shadow-lg p-6">
+                            <h3 class="text-xl font-black text-slate-800 mb-6">Product Type (Tons)</h3>
+                            <!-- Flex Center to ensure chart has space for outside labels -->
+                            <div class="relative h-[400px] w-full flex justify-center items-center"><canvas id="productTypeChart"></canvas></div>
+                        </div>
+                    </div>
+
+                    <!-- Chart: Active Status -->
+                    <div class="bg-white rounded-2xl shadow-lg p-6 mb-8">
+                        <h3 class="text-xl font-black text-slate-800 mb-6">Active vs Non-Active (Based on Age Day)</h3>
+                        <div class="relative h-[800px] w-full"><canvas id="activeStatusChart"></canvas></div>
+                    </div>
+
+                    <!-- Table -->
+                    <div class="bg-white rounded-2xl shadow-lg p-6 mb-8">
+                        <div class="flex justify-between items-center mb-6">
+                            <h3 class="text-xl font-black text-slate-800">Detailed Inventory</h3>
+                            <div class="flex items-center gap-3">
+                                <!-- Pagination Controls -->
+                                <button onclick="changePage(-1)" class="bg-slate-100 hover:bg-slate-200 text-slate-600 px-3 py-1.5 rounded-lg text-xs font-bold border border-slate-300 transition disabled:opacity-50" id="btn-prev">Previous</button>
+                                <span id="page-indicator" class="text-xs font-bold text-slate-500">Page 1 of 1</span>
+                                <button onclick="changePage(1)" class="bg-slate-100 hover:bg-slate-200 text-slate-600 px-3 py-1.5 rounded-lg text-xs font-bold border border-slate-300 transition disabled:opacity-50" id="btn-next">Next</button>
+                                
+                                <span id="detailed-count" class="text-xs font-black bg-slate-100 text-slate-600 px-3 py-1.5 rounded-lg border border-slate-200 ml-2">0 Rows</span>
+                            </div>
+                        </div>
+                        <div class="table-container border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                            <table class="min-w-full text-sm text-left">
+                                <thead class="text-xs text-white uppercase bg-slate-800 sticky top-0 z-10 font-bold tracking-wider">
+                                    <tr>
+                                        <th class="px-6 py-3 border-r border-slate-700 align-top">
+                                            HU
+                                            <input type="text" placeholder="Search HU..." class="th-search-input" onkeyup="updateTableSearch('hu', this.value)">
+                                        </th>
+                                        <th class="px-6 py-3 border-r border-slate-700 align-top">
+                                            Mat.Code
+                                            <input type="text" placeholder="Search Mat..." class="th-search-input" onkeyup="updateTableSearch('matCode', this.value)">
+                                        </th>
+                                        <th class="px-6 py-3 border-r border-slate-700 align-top">
+                                            Description
+                                            <input type="text" placeholder="Search Desc..." class="th-search-input" onkeyup="updateTableSearch('desc', this.value)">
+                                        </th>
+                                        <th class="px-6 py-3 border-r border-slate-700 align-top">
+                                            Batch
+                                            <input type="text" placeholder="Search Batch..." class="th-search-input" onkeyup="updateTableSearch('batch', this.value)">
+                                        </th>
+                                        <th class="px-6 py-3 text-right border-r border-slate-700 align-top">
+                                            Weight (KG)
+                                        </th>
+                                        <th class="px-6 py-3 align-top">
+                                            Status
+                                            <input type="text" placeholder="Search Status..." class="th-search-input" onkeyup="updateTableSearch('status', this.value)">
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody id="detailedInventoryTableBody" class="divide-y divide-slate-100 bg-white"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- STORAGE TAB -->
+            <div id="content-storage" class="tab-content hidden animate-fade-in">
+                <div class="sticky top-0 z-20 bg-slate-50/95 backdrop-blur-sm px-6 py-4 mb-6">
+                    <div class="bg-white rounded-2xl shadow-lg p-6 border border-slate-100">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-sm font-black text-slate-400 uppercase tracking-wide">Filters</h3>
+                             <button onclick="clearStorageFilters()" class="text-xs text-red-500 hover:text-red-700 font-bold underline">Clear</button>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                            <div class="relative group" id="container-storage-sloc">
+                                <label class="block text-xs font-bold text-slate-500 mb-2 uppercase tracking-wide">Sloc (Filter)</label>
+                                <button onclick="toggleDropdown('storage-sloc')" id="btn-storage-sloc" class="w-full bg-slate-50 hover:bg-white border-2 border-slate-200 hover:border-amber-400 text-slate-700 text-sm font-bold rounded-xl text-left p-3 flex justify-between items-center"><span class="truncate">Select Sloc...</span></button>
+                                <div id="dropdown-storage-sloc" class="hidden absolute top-full left-0 w-full bg-white border border-slate-200 rounded-xl shadow-xl z-50 mt-2 multiselect-dropdown p-2"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="px-8 pb-6">
+                    <!-- Storage Metrics -->
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                        <div class="bg-white rounded-2xl shadow-lg p-6 border-l-8 border-blue-500">
+                            <p class="text-sm font-black text-slate-400 uppercase tracking-widest">Total Capacity</p>
+                            <h3 id="storage-total-capacity" class="text-4xl font-black text-slate-800 mt-2">0.00</h3>
+                            <p class="text-xs font-bold text-slate-400 mt-2">Area Table</p>
+                        </div>
+                        <div class="bg-white rounded-2xl shadow-lg p-6 border-l-8 border-amber-500">
+                            <p class="text-sm font-black text-slate-400 uppercase tracking-widest">Used Capacity</p>
+                            <h3 id="storage-used-capacity" class="text-4xl font-black text-slate-800 mt-2">0.00</h3>
+                            <p class="text-xs font-bold text-slate-400 mt-2">Storage Table</p>
+                        </div>
+                        <div class="bg-white rounded-2xl shadow-lg p-6 border-l-8 border-emerald-500">
+                            <p class="text-sm font-black text-slate-400 uppercase tracking-widest">Utilization</p>
+                            <h3 id="storage-utilization" class="text-4xl font-black text-slate-800 mt-2">0.0%</h3>
+                            <p class="text-xs font-bold text-slate-400 mt-2">Occupied</p>
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-2xl shadow-lg p-6 mb-8">
+                        <h3 class="text-xl font-black text-slate-800 mb-6">Capacity Overview (Tons)</h3>
+                        <div class="relative h-[500px] w-full"><canvas id="capacityChart"></canvas></div>
+                    </div>
+                    
+                    <div class="bg-white rounded-2xl shadow-lg p-6 mb-8">
+                        <h3 class="text-xl font-black text-slate-800 mb-6">Group Sale Breakdown (Tons) - Source: Storage Table</h3>
+                        <div class="relative h-[500px] w-full"><canvas id="storageGroupSaleChart"></canvas></div>
+                    </div>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                         <div class="bg-white rounded-2xl shadow-lg p-6">
+                            <h3 class="text-xl font-black text-slate-800 mb-6">Group Product (Tons) - Source: Storage Table</h3>
+                            <div class="relative h-[400px] w-full"><canvas id="storageGroupProductChart"></canvas></div>
+                        </div>
+                        <div class="bg-white rounded-2xl shadow-lg p-6">
+                            <h3 class="text-xl font-black text-slate-800 mb-6">Product Type (Tons) - Source: Storage Table</h3>
+                            <div class="relative h-[400px] w-full flex justify-center"><canvas id="storageProductTypeChart"></canvas></div>
+                        </div>
+                    </div>
+
+                    <div class="mb-8">
+                        <h3 class="text-xl font-black text-slate-800 mb-6">Storage Areas</h3>
+                        <div id="storage-area-cards" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                             <div class="col-span-full text-center py-12 text-slate-400 bg-white rounded-2xl border-2 border-dashed border-slate-200">กำลังโหลด...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 12L1 TAB -->
+            <div id="content-12l1" class="tab-content hidden animate-fade-in pb-8">
+                 <div class="sticky top-0 z-20 bg-slate-50/95 backdrop-blur-sm px-6 py-4 mb-6">
+                     <!-- 12L1 Metrics Cards -->
+                     <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                        <div class="bg-white rounded-2xl shadow-lg p-6 border-l-8 border-blue-500">
+                            <p class="text-sm font-black text-slate-400 uppercase tracking-widest">Total Capacity</p>
+                            <h3 id="l1-weight" class="text-4xl font-black text-slate-800 mt-2">0.00</h3>
+                            <p class="text-xs font-bold text-slate-400 mt-2">Tons (From Weight)</p>
+                        </div>
+                        <div class="bg-white rounded-2xl shadow-lg p-6 border-l-8 border-amber-500">
+                            <p class="text-sm font-black text-slate-400 uppercase tracking-widest">Total Qty</p>
+                            <h3 id="l1-qty" class="text-4xl font-black text-slate-800 mt-2">0</h3>
+                            <p class="text-xs font-bold text-slate-400 mt-2">Units (From Qty)</p>
+                        </div>
+                        <div class="bg-white rounded-2xl shadow-lg p-6 border-l-8 border-emerald-500">
+                            <p class="text-sm font-black text-slate-400 uppercase tracking-widest">Materials</p>
+                            <h3 id="l1-mat" class="text-4xl font-black text-slate-800 mt-2">0</h3>
+                            <p class="text-xs font-bold text-slate-400 mt-2">Unique Codes</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="px-8 pb-6">
+                    <!-- 12L1 Charts -->
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                        <!-- Chart 1: Sloc Distribution -->
+                        <div class="bg-white rounded-2xl shadow-lg p-6">
+                            <h3 class="text-xl font-black text-slate-800 mb-6">Sloc Distribution (Tons)</h3>
+                            <div class="relative h-[400px] w-full"><canvas id="sloc12L1Chart"></canvas></div>
+                        </div>
+                        <!-- Chart 2: Customer Drilldown -->
+                        <div class="bg-white rounded-2xl shadow-lg p-6">
+                            <div class="flex justify-between items-center mb-6">
+                                <h3 id="customer-chart-title" class="text-xl font-black text-slate-800">Customer Weight (Tons)</h3>
+                                <button id="btn-back-customer" onclick="resetCustomerDrilldown()" class="hidden bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold py-1.5 px-4 rounded-lg text-xs transition-colors border border-slate-300">
+                                    ← Back to Customers
+                                </button>
+                            </div>
+                            <div class="relative h-[400px] w-full"><canvas id="customer12L1Chart"></canvas></div>
+                            <p class="text-xs text-center text-slate-400 mt-2 italic font-medium">Click on a bar to see Materials</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <!-- LOADING MODAL -->
+    <div id="loading-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900 bg-opacity-90 backdrop-blur-sm hidden">
+        <div class="bg-white rounded-3xl shadow-2xl p-10 max-w-md w-full border-t-8 border-amber-500 transform scale-100 transition-all">
+            <div class="text-center mb-6">
+                <h3 id="modal-title" class="text-3xl font-black text-slate-800 mb-1 tracking-tight">กำลังดึงข้อมูล...</h3>
+                <p class="text-base text-slate-500 font-medium" id="loading-status-text">เชื่อมต่อฐานข้อมูล Supabase</p>
+            </div>
+
+            <!-- Main Power Bar -->
+            <div id="progress-container" class="relative mb-6">
+                 <div class="flex mb-2 items-end justify-between">
+                    <span class="text-[10px] font-black tracking-widest text-slate-400 uppercase">Total Progress</span>
+                    <span id="percentage-text" class="text-2xl font-black text-amber-500">0%</span>
+                </div>
+                <!-- Power Bar Background -->
+                <div class="overflow-hidden h-6 text-xs flex rounded-full bg-slate-100 shadow-inner border border-slate-200 relative">
+                    <!-- Power Bar Fill -->
+                    <div id="progress-fill" style="width:0%" class="shadow-lg flex flex-col text-center whitespace-nowrap text-white justify-center bg-gradient-to-r from-amber-400 via-orange-400 to-red-500 transition-all duration-300 relative">
+                        <!-- Shine Effect -->
+                        <div class="absolute inset-0 w-full h-full animate-shimmer"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Table Status -->
+            <div id="stats-container" class="bg-slate-50 rounded-2xl p-5 border border-slate-100 shadow-sm">
+                <div class="flex justify-between items-center mb-3 border-b border-slate-200 pb-3">
+                    <span class="text-sm font-bold text-slate-600">Tables Loaded</span>
+                    <div class="flex items-baseline gap-1">
+                        <span id="tables-completed" class="text-2xl font-black text-slate-800">0</span>
+                        <span class="text-sm font-bold text-slate-400">/</span>
+                        <span id="tables-total" class="text-sm font-bold text-slate-400">4</span>
+                    </div>
+                </div>
+                <div class="flex justify-between items-center text-xs">
+                    <span class="font-bold text-slate-400 uppercase tracking-wide">Current Action</span>
+                    <span id="current-table-name" class="font-bold text-blue-500 animate-pulse">Initializing...</span>
+                </div>
+                <div class="flex justify-between items-center text-xs mt-2">
+                     <span class="font-bold text-slate-400 uppercase tracking-wide">Rows Fetched</span>
+                     <span id="fetched-count" class="font-bold text-slate-700">0</span>
+                </div>
+            </div>
+
+            <!-- Retry Button -->
+            <div id="retry-container" class="hidden mt-6 text-center">
+                <button onclick="location.reload()" class="bg-slate-800 hover:bg-slate-900 text-white font-bold py-3 px-8 rounded-xl shadow-lg hover:shadow-xl w-full transition-all transform hover:scale-105">ลองใหม่ (Reload)</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SCRIPTS -->
+    <script>
+        // --- 1. GLOBAL VARIABLES ---
+        const SUPABASE_URL = 'https://mtrxuxmwqilajpzthwgm.supabase.co';
+        const SUPABASE_KEY = 'sb_publishable_19rRmV0jbDj56FYDtuopwg_B-2Gfh4C'; 
+        const TABLE_NAMES = ['12L1', 'Aging', 'Area', 'Storage'];
+        const CHUNK_SIZE = 1000;
+
+        var _sbClient; 
+        var dbData = { '12L1': [], 'Aging': [], 'Area': [], 'Storage': [] };
+        var chartInstances = {};
+        
+        // Filters & Pagination State
+        var storageFilters = { sloc: new Set() };
+        var selectedFilters = { month: new Set(), period: new Set(), status: new Set(), sloc: new Set(), groupSale: new Set() };
+        var tableSearch = { hu: '', matCode: '', desc: '', batch: '', status: '' };
+        var currentPage = 1;
+        var rowsPerPage = 100;
+        var currentFilteredData = [];
+        
+        var agingSlocLabels = {}; 
+        var storageSlocLabels = {};
+        var filterTimeout;
+        var searchTimeout;
+        
+        // 12L1 Specific Globals
+        var currentDrilldownCustomer = null;
+        var customerMaterialData = {}; 
+
+        var COL_MAP = {
+            weight: null, hu: null, matCode: null, 
+            groupSale: null, groupProduct: null, productType: null,
+            sloc: null, ageDay: null, month: null, status: null,
+            desc: null, batch: null, qty: null, day: null,
+            areaCapacity: null, storageWeight: null,
+            areaSloc: null, storageSloc: null, 
+            areaGate: null, storageGate: null,
+            areaKong: null, storageKong: null,
+            storageGroupSale: null, storageGroupProduct: null, storageProductType: null,
+            l1Customer: null
+        };
+
+        // --- 2. GLOBAL HELPER FUNCTIONS ---
+
+        window.updateStatus = function(isOnline, text) {
+            const indicator = document.getElementById('status-indicator');
+            if (indicator) {
+                indicator.innerHTML = isOnline 
+                    ? `<span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shadow-lg shadow-emerald-400/50"></span> ${text}`
+                    : `<span class="w-2.5 h-2.5 rounded-full bg-red-500 shadow-lg shadow-red-500/50"></span> ${text}`;
+                indicator.className = isOnline ? "flex items-center gap-3 text-xs font-bold text-emerald-400 tracking-wide" : "flex items-center gap-3 text-xs font-bold text-red-400 tracking-wide";
+            }
+        };
+
+        window.toggleSidebar = function() {
+            const sidebar = document.getElementById('sidebar');
+            const icon = document.getElementById('toggle-icon');
+            if (sidebar) {
+                sidebar.classList.toggle('collapsed');
+                if (sidebar.classList.contains('collapsed')) {
+                    sidebar.classList.remove('w-64');
+                    sidebar.classList.add('w-20');
+                    if(icon) icon.setAttribute('d', 'M9 5l7 7-7 7'); 
+                } else {
+                    sidebar.classList.remove('w-20');
+                    sidebar.classList.add('w-64');
+                    if(icon) icon.setAttribute('d', 'M15 19l-7-7 7-7'); 
+                }
+            }
+        };
+
+        window.switchTab = function(tabName) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+            const content = document.getElementById(`content-${tabName}`);
+            const btn = document.getElementById(`btn-${tabName}`);
+            if(content) content.classList.remove('hidden');
+            if(btn) btn.classList.add('active');
+            
+            const titles = { 'aging': 'Aging Analysis', 'storage': 'Storage Capacity', '12l1': '12L1 Overview' };
+            const titleEl = document.getElementById('page-title');
+            if(titleEl) titleEl.innerText = titles[tabName] || 'Dashboard';
+        };
+        
+        window.resetCustomerDrilldown = function() {
+            currentDrilldownCustomer = null;
+            document.getElementById('btn-back-customer').classList.add('hidden');
+            document.getElementById('customer-chart-title').innerText = 'Customer Weight (Tons)';
+            calculate12L1Metrics(); 
+        };
+
+        window.showErrorState = function(msg) {
+            const spinner = document.getElementById('spinner-icon');
+            const errorIcon = document.getElementById('error-icon');
+            const prog = document.getElementById('progress-container');
+            const stats = document.getElementById('stats-container');
+            const title = document.getElementById('modal-title');
+            const status = document.getElementById('loading-status-text');
+            const retry = document.getElementById('retry-container');
+
+            if(spinner) spinner.classList.add('hidden');
+            if(errorIcon) errorIcon.classList.remove('hidden');
+            if(prog) prog.classList.add('hidden');
+            if(stats) stats.classList.add('hidden');
+            
+            if(title) {
+                title.innerText = "การเชื่อมต่อขัดข้อง";
+                title.classList.add('text-red-600');
+            }
+            if(status) {
+                status.innerText = msg;
+                status.classList.add('text-red-500');
+            }
+            if(retry) retry.classList.remove('hidden');
+            window.updateStatus(false, 'Disconnected');
+        };
+
+        window.updateProgress = function(current, total, activeTable) {
+            requestAnimationFrame(() => {
+                let percentage = 0;
+                if (total > 0) percentage = Math.round((current / total) * 100);
+                else percentage = current > 0 ? 50 : 0; 
+                if (percentage > 100) percentage = 100;
+
+                const fill = document.getElementById('progress-fill');
+                if(fill) fill.style.width = `${percentage}%`;
+                
+                const text = document.getElementById('percentage-text');
+                if(text) text.innerText = `${percentage}%`;
+                
+                const count = document.getElementById('fetched-count');
+                if(count) count.innerText = current.toLocaleString();
+                
+                const tableStatus = document.getElementById('current-table-name');
+                if(tableStatus && activeTable) tableStatus.innerText = `Fetching ${activeTable}...`;
+            });
+        };
+        
+        window.updateTableCount = function(completed, total) {
+            const compEl = document.getElementById('tables-completed');
+            const totalEl = document.getElementById('tables-total');
+            if(compEl) compEl.innerText = completed;
+            if(totalEl) totalEl.innerText = total;
+        };
+
+        window.toggleDropdown = function(id) {
+            const dropdown = document.getElementById(`dropdown-${id}`);
+            if(dropdown) dropdown.classList.toggle('hidden');
+        };
+        
+        window.toggleCheckbox = function(div, id, val) {
+            const cb = div.querySelector('input');
+            cb.checked = !cb.checked;
+            if (id === 'storage-sloc') { cb.checked ? storageFilters.sloc.add(val) : storageFilters.sloc.delete(val); }
+            else { cb.checked ? selectedFilters[id].add(val) : selectedFilters[id].delete(val); }
+            
+            const btn = document.querySelector(`#btn-${id} span`);
+            const count = id === 'storage-sloc' ? storageFilters.sloc.size : selectedFilters[id].size;
+            btn.innerText = count === 0 ? `Select ${id.replace('storage-', '')}...` : `${count} Selected`;
+
+            clearTimeout(filterTimeout);
+            filterTimeout = setTimeout(() => {
+                if(id.startsWith('storage')) calculateStorageMetrics();
+                else applyAgingFilters();
+            }, 300);
+        };
+        
+        window.clearStorageFilters = function() {
+            storageFilters.sloc.clear();
+            document.querySelectorAll('#dropdown-storage-sloc input').forEach(c => c.checked = false);
+            const btn = document.querySelector('#btn-storage-sloc span');
+            if(btn) btn.innerText = 'Select Sloc...';
+            calculateStorageMetrics();
+        };
+
+        window.clearAllFilters = function() {
+            selectedFilters.month.clear(); selectedFilters.period.clear(); selectedFilters.status.clear(); selectedFilters.sloc.clear(); selectedFilters.groupSale.clear();
+            document.querySelectorAll('.multiselect-dropdown input').forEach(c => { if(!c.closest('#dropdown-storage-sloc')) c.checked = false; });
+            ['month', 'period', 'status', 'sloc', 'groupSale'].forEach(id => {
+                const sp = document.querySelector(`#btn-${id} span`);
+                if(sp) sp.innerText = `Select ${id}...`;
+            });
+            // Clear Search Inputs
+            Object.keys(tableSearch).forEach(k => { tableSearch[k] = ''; });
+            document.querySelectorAll('.th-search-input').forEach(el => el.value = '');
+            applyAgingFilters();
+        };
+
+        // Table Search Function
+        window.updateTableSearch = function(field, value) {
+            tableSearch[field] = value.toLowerCase();
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                applyAgingFilters();
+            }, 400); // Debounce
+        };
+
+        // Pagination
+        window.changePage = function(delta) {
+            const maxPage = Math.ceil(currentFilteredData.length / rowsPerPage);
+            const newPage = currentPage + delta;
+            if (newPage >= 1 && newPage <= maxPage) {
+                currentPage = newPage;
+                renderDetailedTable();
+            }
+        };
+
+        // --- INTERNAL HELPERS ---
+        function cleanStr(s) {
+            if (s === null || s === undefined) return '-';
+            const str = String(s).trim();
+            return str === '' ? '-' : str.toUpperCase();
+        }
+
+        function normalizeSloc(s) {
+            if (s === null || s === undefined) return 'UNKNOWN';
+            return String(s).toUpperCase().trim().replace(/[^A-Z0-9.\u0E00-\u0E7F]/g, '');
+        }
+
+        function getVal(row, keyName, defaultVal = undefined) {
+            const key = COL_MAP[keyName];
+            return key && row[key] !== undefined ? row[key] : defaultVal;
+        }
+
+        function getDayStrictValue(row) {
+            const val = row[COL_MAP.day]; 
+            if (val === undefined || val === null) return 0;
+            if (typeof val === 'number') return val;
+            const str = String(val).trim();
+            if (str === '-' || str === '') return 0;
+            const cleanStrVal = str.replace(/,/g, '');
+            const num = parseFloat(cleanStrVal);
+            return isNaN(num) ? 0 : num;
+        }
+
+        function findKeyInRow(row, ...candidates) {
+            if (!row) return null;
+            for (const c of candidates) if (row[c] !== undefined) return c;
+            const keys = Object.keys(row);
+            for (const c of candidates) {
+                const normC = c.toLowerCase().replace(/[^a-z0-9\u0E00-\u0E7F]/g, '');
+                for (const k of keys) {
+                    if (k.toLowerCase().replace(/[^a-z0-9\u0E00-\u0E7F]/g, '') === normC) return k;
+                }
+            }
+            return null;
+        }
+
+        // --- DATA LOGIC ---
+
+        function determineColumnMappings() {
+             const agingRow = dbData['Aging'][0] || {};
+            // Aging Columns
+            COL_MAP.weight = findKeyInRow(agingRow, 'Weight', 'weight', 'WEIGHT', 'Net Weight', 'Total Weight');
+            COL_MAP.hu = findKeyInRow(agingRow, 'HU', 'hu', 'Hu');
+            COL_MAP.matCode = findKeyInRow(agingRow, 'Mat.Code', 'mat.code', 'Mat_Code', 'Material', 'Material Code');
+            COL_MAP.groupSale = findKeyInRow(agingRow, 'Group Sale', 'group sale', 'Group_Sale');
+            COL_MAP.groupProduct = findKeyInRow(agingRow, 'Group Product', 'group product', 'Group_Product');
+            COL_MAP.productType = findKeyInRow(agingRow, 'Product Type', 'product type', 'Product_Type');
+            COL_MAP.sloc = findKeyInRow(agingRow, 'Sloc', 'sloc', 'SLOC', 'Sloc.', 'Plant', 'Location', 'Warehouse'); 
+            COL_MAP.ageDay = findKeyInRow(agingRow, 'Age Day', 'age day', 'Age day', 'AGE DAY', 'Age_Day', 'Age_Days');
+            COL_MAP.day = findKeyInRow(agingRow, 'Day', 'day', 'Days', 'days'); 
+            COL_MAP.month = findKeyInRow(agingRow, 'Month', 'month', 'MONTH');
+            COL_MAP.status = findKeyInRow(agingRow, 'Status', 'status', 'STATUS');
+            COL_MAP.desc = findKeyInRow(agingRow, 'Material Description', 'Description', 'description');
+            COL_MAP.batch = findKeyInRow(agingRow, 'Batch', 'batch');
+            COL_MAP.qty = findKeyInRow(agingRow, 'Qty', 'qty', 'Stock');
+            
+            // Area Columns
+            const areaRow = dbData['Area'][0] || {};
+            COL_MAP.areaCapacity = findKeyInRow(areaRow, 'พื้นที่ที่วาง (Tons.)', 'Capacity', 'Total Capacity', 'Space', 'Area', 'พื้นที่', 'Max Capacity');
+            COL_MAP.areaSloc = findKeyInRow(areaRow, 'Sloc.', 'Sloc', 'sloc', 'SLOC', 'Location', 'Plant');
+            COL_MAP.areaGate = findKeyInRow(areaRow, 'Gate', 'gate', 'GATE', 'Bin', 'Bin Code');
+            COL_MAP.areaKong = findKeyInRow(areaRow, 'กอง', 'Kong', 'kong', 'Heap', 'Pile', 'Stack');
+
+            // Storage Columns
+            const storageRow = dbData['Storage'][0] || {};
+            COL_MAP.storageWeight = findKeyInRow(storageRow, 'Weight', 'weight', 'Net Weight', 'Total Weight', 'น้ำหนัก');
+            COL_MAP.storageSloc = findKeyInRow(storageRow, 'Sloc.', 'Sloc', 'sloc', 'SLOC', 'Location', 'Plant'); 
+            COL_MAP.storageGate = findKeyInRow(storageRow, 'Gate', 'gate', 'GATE', 'Bin', 'Storage Bin');
+            COL_MAP.storageKong = findKeyInRow(storageRow, 'กอง', 'Kong', 'kong', 'Heap', 'Pile', 'Stack');
+            COL_MAP.storageGroupSale = findKeyInRow(storageRow, 'Group Sale', 'group sale', 'Group_Sale');
+            COL_MAP.storageGroupProduct = findKeyInRow(storageRow, 'Group Product', 'group product', 'Group_Product');
+            COL_MAP.storageProductType = findKeyInRow(storageRow, 'Product Type', 'product type', 'Product_Type');
+            
+            // 12L1 Columns
+            const l1Row = dbData['12L1'][0] || {};
+            COL_MAP.l1Customer = findKeyInRow(l1Row, 'Customer', 'customer', 'Customer Name', 'Sold-to', 'Name', 'ชื่อลูกค้า');
+            
+            console.log("Column Mapping:", COL_MAP);
+        }
+
+        // Fixed Function Name: renderMultiSelect (CamelCase)
+        function renderMultiSelect(id, values, labelMap = {}) {
+            const dropdown = document.getElementById(`dropdown-${id}`);
+            if(!dropdown) return;
+            if (values.length === 0) { dropdown.innerHTML = '<div class="p-3 text-xs text-slate-400 italic text-center">No data</div>'; return; }
+            dropdown.innerHTML = values.map(val => {
+                const isSelected = (id === 'storage-sloc') ? storageFilters.sloc.has(val) : selectedFilters[id].has(val);
+                return `<div class="flex items-center p-3 hover:bg-slate-50 cursor-pointer" onclick="toggleCheckbox(this, '${id}', '${val}')">
+                    <input type="checkbox" ${isSelected ? 'checked' : ''} class="w-5 h-5 text-amber-500 rounded mr-3 pointer-events-none">
+                    <span class="text-sm font-bold text-slate-700 pointer-events-none">${labelMap[val] || val}</span>
+                </div>`;
+            }).join('');
+        }
+
+        function initAgingFilters() {
+            const agingData = dbData['Aging'] || [];
+            const months = new Set();
+            const statuses = new Set();
+            const groupSales = new Set();
+            const slocSet = new Set();
+            agingSlocLabels = {}; 
+
+            agingData.forEach(row => {
+                const month = getVal(row, 'month');
+                if (month) months.add(month);
+                const status = getVal(row, 'status');
+                if (status) statuses.add(status);
+                const gs = getVal(row, 'groupSale');
+                if (gs) groupSales.add(gs);
+                const slocRaw = getVal(row, 'sloc');
+                if (slocRaw) {
+                    const norm = normalizeSloc(slocRaw);
+                    slocSet.add(norm);
+                    if (!agingSlocLabels[norm]) agingSlocLabels[norm] = String(slocRaw).trim();
+                }
+            });
+
+            renderMultiSelect('month', Array.from(months).sort());
+            renderMultiSelect('status', Array.from(statuses).sort());
+            renderMultiSelect('groupSale', Array.from(groupSales).sort());
+            renderMultiSelect('sloc', Array.from(slocSet).sort(), agingSlocLabels);
+            
+            const periodOptions = ['< 1 Year', '> 1 Year', '> 2 Years', '> 3 Years'];
+            const periodLabels = { 
+                '< 1 Year': 'น้อยกว่า 1 ปี (<365 days)', 
+                '> 1 Year': 'มากกว่า 1 ปี (365-730 days)', 
+                '> 2 Years': 'มากกว่า 2 ปี (730-1095 days)', 
+                '> 3 Years': 'มากกว่า 3 ปี (>1095 days)' 
+            };
+            renderMultiSelect('period', periodOptions, periodLabels);
+            applyAgingFilters();
+        }
+
+        function initStorageFilters() {
+            const areaData = dbData['Area'] || [];
+            const storageData = dbData['Storage'] || [];
+            const slocSet = new Set();
+            storageSlocLabels = {}; 
+
+            areaData.forEach(row => {
+                const s = getVal(row, 'areaSloc');
+                if (s) {
+                    const norm = normalizeSloc(s);
+                    slocSet.add(norm);
+                    if (!storageSlocLabels[norm]) storageSlocLabels[norm] = String(s).trim();
+                }
+            });
+
+            storageData.forEach(row => {
+                const s = getVal(row, 'storageSloc');
+                if (s) {
+                    const norm = normalizeSloc(s);
+                    slocSet.add(norm);
+                    if (!storageSlocLabels[norm]) storageSlocLabels[norm] = String(s).trim();
+                }
+            });
+            renderMultiSelect('storage-sloc', Array.from(slocSet).sort(), storageSlocLabels);
+        }
+
+        function applyAgingFilters() {
+            const agingData = dbData['Aging'] || [];
+            currentFilteredData = agingData.filter(row => {
+                // 1. Multi-Select Filters
+                if (selectedFilters.month.size > 0 && !selectedFilters.month.has(getVal(row, 'month'))) return false;
+                if (selectedFilters.status.size > 0 && !selectedFilters.status.has(getVal(row, 'status'))) return false;
+                if (selectedFilters.groupSale.size > 0 && !selectedFilters.groupSale.has(getVal(row, 'groupSale'))) return false;
+                
+                if (selectedFilters.sloc.size > 0) {
+                    const rowSloc = getVal(row, 'sloc');
+                    if (!rowSloc) return false;
+                    const norm = normalizeSloc(rowSloc);
+                    if (!selectedFilters.sloc.has(norm)) return false;
+                }
+                
+                if (selectedFilters.period.size > 0) {
+                    const day = getDayStrictValue(row); 
+                    let match = false;
+                    if (selectedFilters.period.has('< 1 Year') && day < 365) match = true;
+                    if (selectedFilters.period.has('> 1 Year') && (day >= 365 && day < 730)) match = true;
+                    if (selectedFilters.period.has('> 2 Years') && (day >= 730 && day < 1095)) match = true;
+                    if (selectedFilters.period.has('> 3 Years') && day >= 1095) match = true;
+                    if (!match) return false;
+                }
+
+                // 2. Search Filters
+                if (tableSearch.hu && !String(getVal(row, 'hu') || '').toLowerCase().includes(tableSearch.hu)) return false;
+                if (tableSearch.matCode && !String(getVal(row, 'matCode') || '').toLowerCase().includes(tableSearch.matCode)) return false;
+                if (tableSearch.desc && !String(getVal(row, 'desc') || '').toLowerCase().includes(tableSearch.desc)) return false;
+                if (tableSearch.batch && !String(getVal(row, 'batch') || '').toLowerCase().includes(tableSearch.batch)) return false;
+                if (tableSearch.status && !String(getVal(row, 'status') || '').toLowerCase().includes(tableSearch.status)) return false;
+
+                return true;
+            });
+            
+            currentPage = 1; // Reset to first page on filter change
+            calculateAgingMetrics(currentFilteredData);
+            renderDetailedTable(); // Pagination handled here
+        }
+
+        function calculateAgingMetrics(data) {
+            let totalWeight = 0, totalHU = 0;
+            const uniqueMatCodes = new Set();
+            const groupSaleMap = {}, groupProductMap = {}, productTypeMap = {}, activeStatusMap = {}, slocMap = {};
+            const periodMap = { '< 1 Year': 0, '> 1 Year': 0, '> 2 Years': 0, '> 3 Years': 0 };
+
+            for (let i = 0; i < data.length; i++) {
+                const row = data[i];
+                let wRaw = getVal(row, 'weight');
+                let w = typeof wRaw === 'number' ? wRaw : (typeof wRaw === 'string' ? parseFloat(wRaw.replace(/,/g, '')) : 0);
+                if (isNaN(w)) w = 0;
+                totalWeight += w;
+
+                if (getVal(row, 'hu') || Object.keys(row).length > 0) totalHU++;
+                const matCode = getVal(row, 'matCode');
+                if (matCode) uniqueMatCodes.add(matCode);
+
+                const grpSale = getVal(row, 'groupSale') || 'Others';
+                groupSaleMap[grpSale] = (groupSaleMap[grpSale] || 0) + w;
+
+                const grpProd = getVal(row, 'groupProduct') || 'Others';
+                groupProductMap[grpProd] = (groupProductMap[grpProd] || 0) + w;
+
+                const prodType = getVal(row, 'productType') || 'Others';
+                productTypeMap[prodType] = (productTypeMap[prodType] || 0) + w;
+
+                const slocRaw = getVal(row, 'sloc');
+                const sloc = slocRaw ? String(slocRaw).trim() : 'Unknown';
+                slocMap[sloc] = (slocMap[sloc] || 0) + w;
+
+                const day = getDayStrictValue(row);
+                if (day < 365) periodMap['< 1 Year'] += w;
+                else if (day < 730) periodMap['> 1 Year'] += w;
+                else if (day < 1095) periodMap['> 2 Years'] += w;
+                else periodMap['> 3 Years'] += w;
+
+                const rawAgeDay = getVal(row, 'ageDay');
+                const strAgeDay = (rawAgeDay === null || rawAgeDay === undefined) ? '' : String(rawAgeDay).trim();
+                const isActive = (strAgeDay === '-');
+                
+                if (!activeStatusMap[grpSale]) activeStatusMap[grpSale] = { active: 0, nonActive: 0 };
+                if (isActive) activeStatusMap[grpSale].active += w;
+                else activeStatusMap[grpSale].nonActive += w;
+            }
+
+            const fmt = new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            const fmtInt = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
+            
+            if(document.getElementById('aging-weight')) document.getElementById('aging-weight').innerText = fmt.format(totalWeight / 1000);
+            if(document.getElementById('aging-hu')) document.getElementById('aging-hu').innerText = fmtInt.format(totalHU);
+            if(document.getElementById('aging-mat')) document.getElementById('aging-mat').innerText = fmtInt.format(uniqueMatCodes.size);
+
+            renderHorizontalBarChart('agingChart', 'aging', groupSaleMap, totalWeight, 'Group Sale');
+            renderHorizontalBarChart('groupProductChart', 'groupProduct', groupProductMap, totalWeight, 'Group Product');
+            renderPieChart('productTypeChart', 'productType', productTypeMap, totalWeight, 'Product Type');
+            renderActiveStatusChart('activeStatusChart', 'activeStatus', activeStatusMap, totalWeight);
+            renderHorizontalBarChart('slocChart', 'sloc', slocMap, totalWeight, 'Sloc');
+            renderHorizontalBarChart('agingPeriodChart', 'agingPeriod', periodMap, totalWeight, 'Aging Period');
+        }
+
+        function renderDetailedTable() {
+            const start = (currentPage - 1) * rowsPerPage;
+            const end = start + rowsPerPage;
+            const pageData = currentFilteredData.slice(start, end);
+            
+            let tableHtml = '';
+            pageData.forEach(row => {
+                const desc = getVal(row, 'desc') || '-';
+                const batch = getVal(row, 'batch') || '-';
+                const status = getVal(row, 'status') || '-';
+                const hu = getVal(row, 'hu') || '-';
+                const matCode = getVal(row, 'matCode') || '-';
+                
+                let wRaw = getVal(row, 'weight');
+                let w = typeof wRaw === 'number' ? wRaw : (typeof wRaw === 'string' ? parseFloat(wRaw.replace(/,/g, '')) : 0);
+                if (isNaN(w)) w = 0;
+
+                tableHtml += `
+                    <tr class="hover:bg-slate-50 border-b border-slate-50 transition">
+                        <td class="px-6 py-4 font-mono text-sm text-slate-600 font-bold">${hu}</td>
+                        <td class="px-6 py-4 font-bold text-slate-800">${matCode}</td>
+                        <td class="px-6 py-4 text-slate-500 text-sm font-semibold max-w-xs truncate" title="${desc}">${desc}</td>
+                        <td class="px-6 py-4 text-slate-500 font-semibold">${batch}</td>
+                        <td class="px-6 py-4 text-right font-black text-amber-600">${w.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                        <td class="px-6 py-4"><span class="px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wide ${String(status).toLowerCase() === 'blocked' ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-600'}">${status}</span></td>
+                    </tr>`;
+            });
+
+            const tbBody = document.getElementById('detailedInventoryTableBody');
+            if(tbBody) tbBody.innerHTML = tableHtml || '<tr><td colspan="6" class="px-6 py-8 text-center text-slate-400 italic">No data found matching criteria.</td></tr>';
+            
+            // Update Stats
+            const dCount = document.getElementById('detailed-count');
+            if(dCount) dCount.innerText = `${currentFilteredData.length.toLocaleString()} Total`;
+            
+            // Update Pagination UI
+            const maxPage = Math.ceil(currentFilteredData.length / rowsPerPage) || 1;
+            document.getElementById('page-indicator').innerText = `Page ${currentPage} of ${maxPage}`;
+            document.getElementById('btn-prev').disabled = currentPage === 1;
+            document.getElementById('btn-next').disabled = currentPage === maxPage;
+        }
+
+        // --- CHART FUNCTIONS ---
+        // Register custom plugin to draw lines for outside labels in Pie Chart
+        Chart.register({
+            id: 'outsideLabelLines',
+            afterDraw: (chart) => {
+                if (chart.config.type !== 'pie') return;
+                const ctx = chart.ctx;
+                ctx.save();
+                ctx.strokeStyle = '#cbd5e1';
+                ctx.lineWidth = 1;
+
+                chart.data.datasets.forEach((dataset, i) => {
+                    const meta = chart.getDatasetMeta(i);
+                    meta.data.forEach((element, index) => {
+                        const model = element.tooltipPosition();
+                        const midAngle = element.startAngle + (element.endAngle - element.startAngle) / 2;
+                        
+                        // Calculate outside point
+                        const outerRadius = element.outerRadius;
+                        const x2 = element.x + Math.cos(midAngle) * (outerRadius + 15);
+                        const y2 = element.y + Math.sin(midAngle) * (outerRadius + 15);
+                        
+                        // Only draw if value is visible (not 0)
+                        if (dataset.data[index] > 0) {
+                             ctx.beginPath();
+                             ctx.moveTo(model.x, model.y); // Center of Arc
+                             ctx.lineTo(x2, y2); // Label Position approx
+                             ctx.stroke();
+                        }
+                    });
+                });
+                ctx.restore();
+            }
+        });
+
+        const chartPalette = ['#f59e0b', '#3b82f6', '#10b981', '#ef4444', '#8b5cf6', '#ec4899', '#0ea5e9', '#a855f7', '#fb923c', '#22c55e'];
+
+        function renderHorizontalBarChart(id, name, dataMap, total, title) {
+            const canvas = document.getElementById(id);
+            if(!canvas) return;
+            const ctx = canvas.getContext('2d');
+            if (chartInstances[name]) chartInstances[name].destroy();
+
+            const entries = Object.entries(dataMap).sort((a, b) => b[1] - a[1]);
+            const labels = entries.map(e => e[0]);
+            const data = entries.map(e => e[1] / 1000);
+
+            chartInstances[name] = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels,
+                    datasets: [{ 
+                        label: title, 
+                        data, 
+                        backgroundColor: chartPalette, 
+                        borderRadius: 6, 
+                        barPercentage: 0.7,
+                        clip: false
+                    }]
+                },
+                options: {
+                    indexAxis: 'y', 
+                    responsive: true, 
+                    maintainAspectRatio: false,
+                    layout: { padding: { right: 130, top: 20, bottom: 20, left: 20 } },
+                    plugins: { 
+                        legend: { display: false }, 
+                        datalabels: { 
+                            anchor: 'end', 
+                            align: 'right', 
+                            clamp: false, 
+                            clip: false,
+                            formatter: (v, ctx) => {
+                                const raw = entries[ctx.dataIndex][1];
+                                return `${v.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits:2})} T (${total>0 ? ((raw/total)*100).toFixed(2) : 0}%)`;
+                            }, 
+                            font: {size: 11, weight: 'bold'}
+                        } 
+                    },
+                    scales: { 
+                        x: { display: false, graceful: '40%' }, 
+                        y: { grid: { display: false } } 
+                    }
+                }
+            });
+        }
+
+        function renderPieChart(id, name, dataMap, total, title) {
+            const canvas = document.getElementById(id);
+            if(!canvas) return;
+            const ctx = canvas.getContext('2d');
+            if (chartInstances[name]) chartInstances[name].destroy();
+            const entries = Object.entries(dataMap).sort((a, b) => b[1] - a[1]);
+            
+            chartInstances[name] = new Chart(ctx, {
+                type: 'pie',
+                data: { labels: entries.map(e=>e[0]), datasets: [{ data: entries.map(e=>e[1]/1000), backgroundColor: chartPalette }] },
+                options: { 
+                    responsive: true, 
+                    maintainAspectRatio: false,
+                    layout: { padding: 100 }, // Extra padding for outside labels
+                    plugins: { 
+                        legend: { position: 'right' }, 
+                        datalabels: {
+                            color: '#475569',
+                            anchor: 'end',
+                            align: 'end',
+                            offset: 20, // Push label away
+                            font: {size: 12, weight: 'bold'},
+                            formatter: (value, ctx) => {
+                                const pct = (value / (total/1000) * 100);
+                                if (pct < 1) return ''; // Hide small labels to reduce clutter
+                                return `${value.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}\n(${pct.toFixed(1)}%)`;
+                            }
+                        } 
+                    } 
+                }
+            });
+        }
+
+        // --- UPDATED ACTIVE STATUS CHART ---
+        // Enhanced to handle small values (labels outside/inside dynamically)
+        
+        function renderActiveStatusChart(id, name, dataMap, total) {
+            const canvas = document.getElementById(id);
+            if(!canvas) return;
+            const ctx = canvas.getContext('2d');
+            if (chartInstances[name]) chartInstances[name].destroy();
+            
+            const labels = Object.keys(dataMap).sort((a, b) => (dataMap[b].active+dataMap[b].nonActive) - (dataMap[a].active+dataMap[a].nonActive));
+            
+            // Threshold logic to decide when to push label outside
+            // If value is less than 15% of the total row width, push it outside
+            
+            chartInstances[name] = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels,
+                    datasets: [
+                        { 
+                            label: 'Active', 
+                            data: labels.map(l=>dataMap[l].active/1000), 
+                            backgroundColor: '#10b981', 
+                            borderRadius: 4, 
+                            stack: '1', 
+                            clip: false 
+                        },
+                        { 
+                            label: 'Non-Active', 
+                            data: labels.map(l=>dataMap[l].nonActive/1000), 
+                            backgroundColor: '#ef4444', 
+                            borderRadius: 4, 
+                            stack: '1', 
+                            clip: false 
+                        }
+                    ]
+                },
+                options: {
+                    indexAxis: 'y', 
+                    responsive: true, 
+                    maintainAspectRatio: false,
+                    layout: { padding: { right: 130, top: 30, left: 20 } },
+                    scales: { 
+                        x: { stacked: true, display: false, graceful: '40%' }, 
+                        y: { stacked: true, grid: { display: false } } 
+                    },
+                    plugins: { 
+                        datalabels: { 
+                            formatter: (v, context) => {
+                                if (v <= 0) return '';
+                                const pct = total > 0 ? ((v * 1000 / total) * 100) : 0;
+                                return `${v.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} (${pct.toFixed(1)}%)`;
+                            },
+                            // Dynamic Color Logic
+                            color: (context) => {
+                                const value = context.dataset.data[context.dataIndex];
+                                const active = context.chart.data.datasets[0].data[context.dataIndex];
+                                const nonActive = context.chart.data.datasets[1].data[context.dataIndex];
+                                const rowTotal = active + nonActive;
+                                const pctOfRow = rowTotal > 0 ? (value / rowTotal) : 0;
+
+                                // If narrow bar (<15%), label is pushed 'end'.
+                                if (pctOfRow < 0.15) {
+                                    // If Active (Index 0) pushed end -> lands on Non-Active (Red) -> White Text
+                                    if (context.datasetIndex === 0 && nonActive > 0) return '#fff';
+                                    // If Non-Active (Index 1) pushed end -> lands on White BG -> Dark Text
+                                    // Or if Active pushed end but no Non-Active -> Lands on White BG -> Dark Text
+                                    return '#475569';
+                                }
+                                // Default: Inside Bar -> White Text
+                                return '#fff';
+                            },
+                            // Dynamic Anchor/Align Logic
+                            anchor: (context) => {
+                                const value = context.dataset.data[context.dataIndex];
+                                const active = context.chart.data.datasets[0].data[context.dataIndex];
+                                const nonActive = context.chart.data.datasets[1].data[context.dataIndex];
+                                const rowTotal = active + nonActive;
+                                const pctOfRow = rowTotal > 0 ? (value / rowTotal) : 0;
+                                return (pctOfRow < 0.15) ? 'end' : 'center';
+                            },
+                            align: (context) => {
+                                const value = context.dataset.data[context.dataIndex];
+                                const active = context.chart.data.datasets[0].data[context.dataIndex];
+                                const nonActive = context.chart.data.datasets[1].data[context.dataIndex];
+                                const rowTotal = active + nonActive;
+                                const pctOfRow = rowTotal > 0 ? (value / rowTotal) : 0;
+                                return (pctOfRow < 0.15) ? 'end' : 'center';
+                            },
+                            font: {size: 11, weight: 'bold'},
+                            offset: 4
+                        } 
+                    }
+                }
+            });
+        }
+
+        function renderCapacityChart(id, dataMap) {
+            const canvas = document.getElementById(id);
+            if(!canvas) return;
+            const ctx = canvas.getContext('2d');
+            if (chartInstances['capacity']) chartInstances['capacity'].destroy();
+            
+            const keys = Object.keys(dataMap).sort();
+            chartInstances['capacity'] = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: keys.map(k=>dataMap[k].display),
+                    datasets: [
+                        { label: 'Used', data: keys.map(k=>dataMap[k].used), backgroundColor: '#f59e0b', stack: '1', clip: false },
+                        { label: 'Remaining', data: keys.map(k=>Math.max(0, dataMap[k].total-dataMap[k].used)), backgroundColor: '#cbd5e1', stack: '1', clip: false }
+                    ]
+                },
+                options: { 
+                    responsive: true, 
+                    maintainAspectRatio: false, 
+                    layout: { padding: { top: 60, right: 20, left: 10 } },
+                    scales: { 
+                        x: { stacked: true }, 
+                        y: { stacked: true, graceful: '20%' } 
+                    },
+                    plugins: { 
+                        datalabels: { 
+                            labels: {
+                                value: {
+                                    align: 'center',
+                                    anchor: 'center',
+                                    color: (context) => context.datasetIndex === 0 ? '#fff' : '#475569',
+                                    font: {size: 11, weight: 'bold'},
+                                    formatter: (v, context) => {
+                                        const i = context.dataIndex;
+                                        const k = keys[i];
+                                        const total = dataMap[k].total;
+                                        const used = dataMap[k].used;
+                                        
+                                        if (context.datasetIndex === 0) {
+                                            if (used <= 0) return '';
+                                            const pct = total > 0 ? (used / total) * 100 : 0;
+                                            return `${used.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}\n(${pct.toFixed(1)}%)`;
+                                        }
+                                        if (context.datasetIndex === 1) {
+                                            const remaining = Math.max(0, total - used);
+                                            if (remaining <= 0) return '';
+                                            const pct = total > 0 ? (remaining / total) * 100 : 0;
+                                            return `${remaining.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}\n(${pct.toFixed(1)}%)`;
+                                        }
+                                    }
+                                },
+                                total: {
+                                    align: 'end',
+                                    anchor: 'end',
+                                    color: '#334155',
+                                    font: {size: 11, weight: 'bold'},
+                                    formatter: (v, context) => {
+                                        if (context.datasetIndex !== 1) return null;
+                                        const i = context.dataIndex;
+                                        const k = keys[i];
+                                        const total = dataMap[k].total;
+                                        return `Total: ${total.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+                                    },
+                                    offset: 5
+                                }
+                            }
+                        } 
+                    } 
+                }
+            });
+        }
+        
+        function calculateStorageMetrics() {
+            const areaData = dbData['Area'] || [];
+            const storageData = dbData['Storage'] || [];
+
+            const slocAggMap = {}; 
+            areaData.forEach(row => {
+                const slocRaw = getVal(row, 'areaSloc');
+                if (!slocRaw) return;
+                const normSloc = normalizeSloc(slocRaw);
+                let capVal = getVal(row, 'areaCapacity');
+                let cap = typeof capVal === 'number' ? capVal : parseFloat((String(capVal).replace(/,/g, '') || '0'));
+                if (isNaN(cap)) cap = 0;
+                if (!slocAggMap[normSloc]) slocAggMap[normSloc] = { capacity: 0, used: 0, display: cleanStr(slocRaw) };
+                slocAggMap[normSloc].capacity += cap;
+            });
+
+            // Helper to generate grouping key based on Sloc rules
+            const getGroupKey = (nSloc, g, k) => {
+                if (nSloc === 'FAC.B' || nSloc === 'FAC.E') {
+                    // Group by Gate only (ignore Kong in key)
+                    return `${nSloc}|${g}|-`;
+                } else if (nSloc === 'FAC.L') {
+                    // Group by Kong only (ignore Gate in key)
+                    return `${nSloc}|-|${k}`;
+                }
+                // Default: Group by both
+                return `${nSloc}|${g}|${k}`;
+            };
+
+            const areaMap = {};
+            areaData.forEach(row => {
+                const slocRaw = getVal(row, 'areaSloc');
+                if (!slocRaw) return;
+                const normSloc = normalizeSloc(slocRaw);
+                const gate = cleanStr(getVal(row, 'areaGate') || '-');
+                const kong = cleanStr(getVal(row, 'areaKong') || '-');
+                
+                const uniqueKey = getGroupKey(normSloc, gate, kong);
+
+                let capVal = getVal(row, 'areaCapacity');
+                let cap = typeof capVal === 'number' ? capVal : parseFloat((String(capVal).replace(/,/g, '') || '0'));
+                if (isNaN(cap)) cap = 0;
+                
+                if (!areaMap[uniqueKey]) {
+                    // Removed logic that forced displayGate/displayKong to be '-'
+                    // Now using the actual values found in the first row of the group
+                    
+                    areaMap[uniqueKey] = { 
+                        sloc: cleanStr(slocRaw), 
+                        normSloc, 
+                        gate: gate, 
+                        kong: kong, 
+                        capacity: 0, 
+                        used: 0 
+                    };
+                }
+                areaMap[uniqueKey].capacity += cap;
+            });
+
+            const groupSaleMap = {}, groupProductMap = {}, productTypeMap = {};
+            let totalBreakdownWeight = 0;
+            storageData.forEach(row => {
+                const slocRaw = getVal(row, 'storageSloc');
+                if (!slocRaw) return;
+                const normSloc = normalizeSloc(slocRaw);
+                
+                // Also aggregate used capacity for top-level chart
+                let wVal = getVal(row, 'storageWeight');
+                let w = typeof wVal === 'number' ? wVal : parseFloat((String(wVal).replace(/,/g, '') || '0'));
+                if (isNaN(w)) w = 0;
+                w = w / 1000; 
+                if (!slocAggMap[normSloc]) slocAggMap[normSloc] = { capacity: 0, used: 0, display: cleanStr(slocRaw) };
+                slocAggMap[normSloc].used += w;
+
+                const gate = cleanStr(getVal(row, 'storageGate') || '-');
+                const kong = cleanStr(getVal(row, 'storageKong') || '-');
+                
+                // Use same key logic to match Area
+                const uniqueKey = getGroupKey(normSloc, gate, kong);
+                
+                if (areaMap[uniqueKey]) areaMap[uniqueKey].used += w; 
+
+                if (storageFilters.sloc.size === 0 || storageFilters.sloc.has(normSloc)) {
+                    totalBreakdownWeight += (w * 1000); // Convert back to KG for breakdown charts
+                    const gs = getVal(row, 'storageGroupSale') || 'Others';
+                    groupSaleMap[gs] = (groupSaleMap[gs] || 0) + (w * 1000);
+                    const gp = getVal(row, 'storageGroupProduct') || 'Others';
+                    groupProductMap[gp] = (groupProductMap[gp] || 0) + (w * 1000);
+                    const pt = getVal(row, 'storageProductType') || 'Others';
+                    productTypeMap[pt] = (productTypeMap[pt] || 0) + (w * 1000);
+                }
+            });
+
+            const slocCapacityMap = {};
+            Object.keys(slocAggMap).forEach(key => {
+                if (storageFilters.sloc.size > 0 && !storageFilters.sloc.has(key)) return;
+                slocCapacityMap[key] = {
+                     total: slocAggMap[key].capacity,
+                     used: slocAggMap[key].used,
+                     display: slocAggMap[key].display
+                };
+            });
+
+            let filteredCapacity = 0, filteredUsed = 0;
+             Object.values(slocCapacityMap).forEach(item => { 
+                filteredCapacity += item.total; 
+                filteredUsed += item.used; 
+            });
+            let utilization = filteredCapacity > 0 ? (filteredUsed / filteredCapacity) * 100 : 0;
+
+            const fmt = new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            const fmtPct = new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 });
+
+            if(document.getElementById('storage-total-capacity')) document.getElementById('storage-total-capacity').innerText = fmt.format(filteredCapacity);
+            if(document.getElementById('storage-used-capacity')) document.getElementById('storage-used-capacity').innerText = fmt.format(filteredUsed);
+            if(document.getElementById('storage-utilization')) document.getElementById('storage-utilization').innerText = fmtPct.format(utilization) + '%';
+
+            renderCapacityChart('capacityChart', slocCapacityMap);
+
+            const displayCards = [];
+            Object.values(areaMap).forEach(item => {
+                 if (storageFilters.sloc.size > 0 && !storageFilters.sloc.has(item.normSloc)) return;
+                 displayCards.push(item);
+            });
+            
+            const cardsContainer = document.getElementById('storage-area-cards');
+            // Sort by Status: Over Capacity > Full > Normal > Empty
+            displayCards.sort((a, b) => {
+                const getStatusPriority = (item) => {
+                    const pct = item.capacity > 0 ? (item.used / item.capacity) * 100 : 0;
+                    if (pct > 100) return 1; // เกินพิกัด (Red)
+                    if (pct > 90) return 2;  // เต็ม (Amber)
+                    if (item.used > 0) return 3; // ปกติ (Emerald)
+                    return 4; // ว่าง (Slate)
+                };
+
+                const pA = getStatusPriority(a);
+                const pB = getStatusPriority(b);
+
+                if (pA !== pB) return pA - pB;
+                return b.used - a.used; // Secondary sort by weight desc
+            });
+
+            if (cardsContainer) {
+                if (displayCards.length === 0) {
+                    cardsContainer.innerHTML = `<div class="col-span-full text-center py-12 text-slate-400 bg-white rounded-2xl border-2 border-dashed border-slate-200">ไม่พบข้อมูล (No Match Sloc)</div>`;
+                } else {
+                    cardsContainer.innerHTML = displayCards.map(item => {
+                        const pct = item.capacity > 0 ? (item.used / item.capacity) * 100 : 0;
+                        let status = pct > 100 ? 'เกินพิกัด' : (pct > 90 ? 'เต็ม' : (item.used <= 0 ? 'ว่าง' : 'ปกติ'));
+                        let color = pct > 100 ? 'red' : (pct > 90 ? 'amber' : (item.used <= 0 ? 'slate' : 'emerald'));
+                        return `
+                            <div class="bg-white rounded-2xl shadow-lg p-6 border-l-8 border-${color}-500 relative overflow-hidden group hover:-translate-y-1 transition-all">
+                                <div class="flex justify-between items-center mb-4">
+                                    <span class="font-black text-slate-400 text-xs uppercase">${item.sloc}</span>
+                                    <span class="px-3 py-1 rounded-lg text-xs font-black bg-${color}-100 text-${color}-600">${status}</span>
+                                </div>
+                                <div class="flex items-end mb-5">
+                                    <div><p class="text-[10px] text-slate-400 font-black mb-1">GATE</p><p class="text-3xl font-black text-slate-800">${item.gate}</p></div>
+                                    <div class="ml-6 border-l-2 pl-6 border-slate-100"><p class="text-[10px] text-slate-400 font-black mb-1">กองที่</p><p class="text-3xl font-black text-slate-800">${item.kong}</p></div>
+                                </div>
+                                <div class="flex justify-between items-end mb-3">
+                                    <div><span class="text-2xl font-black text-slate-900">${fmt.format(item.used)}</span><span class="text-xs font-bold text-slate-400 ml-1">Tons</span></div>
+                                    <div class="text-right"><span class="text-xl font-black text-${color}-600">${fmtPct.format(pct)}%</span></div>
+                                </div>
+                                <div class="w-full bg-slate-100 rounded-full h-3 mb-3 overflow-hidden shadow-inner"><div class="h-3 rounded-full bg-${color}-500" style="width: ${Math.min(pct, 100)}%"></div></div>
+                                <div class="flex justify-between text-xs text-slate-400 font-bold uppercase"><span>Capacity Limit</span><span>${fmt.format(item.capacity)} Tons</span></div>
+                            </div>`;
+                    }).join('');
+                }
+            }
+
+            renderHorizontalBarChart('storageGroupSaleChart', 'storageGroupSale', groupSaleMap, totalBreakdownWeight, 'Group Sale');
+            renderHorizontalBarChart('storageGroupProductChart', 'storageGroupProduct', groupProductMap, totalBreakdownWeight, 'Group Product');
+            renderPieChart('storageProductTypeChart', 'storageProductType', productTypeMap, totalBreakdownWeight, 'Product Type');
+        }
+
+        function calculate12L1Metrics() {
+            const l1Data = dbData['12L1'] || [];
+            if(l1Data.length === 0) return;
+
+            let totalWeight = 0, totalQty = 0;
+            const uniqueMats = new Set();
+            const slocMap = {};
+            const customerMap = {}; 
+            customerMaterialData = {}; 
+
+            l1Data.forEach(row => {
+                let wVal = getVal(row, 'weight'); 
+                let w = typeof wVal === 'number' ? wVal : parseFloat((String(wVal).replace(/,/g, '') || '0'));
+                if (isNaN(w)) w = 0;
+                totalWeight += w;
+                let qVal = getVal(row, 'qty');
+                let q = typeof qVal === 'number' ? qVal : parseFloat((String(qVal).replace(/,/g, '') || '0'));
+                if(isNaN(q)) q = 0;
+                totalQty += q;
+                const mat = getVal(row, 'matCode');
+                if(mat) uniqueMats.add(mat);
+                const slocRaw = getVal(row, 'sloc');
+                const sloc = slocRaw ? String(slocRaw).trim() : 'Unknown';
+                slocMap[sloc] = (slocMap[sloc] || 0) + w;
+                const custRaw = getVal(row, 'l1Customer') || 'Unknown Customer';
+                const cust = String(custRaw).trim() || 'Unknown Customer';
+                customerMap[cust] = (customerMap[cust] || 0) + w;
+                if(!customerMaterialData[cust]) customerMaterialData[cust] = {};
+                const matKey = mat || 'Unknown Material';
+                customerMaterialData[cust][matKey] = (customerMaterialData[cust][matKey] || 0) + w;
+            });
+
+            const fmt = new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            const fmtInt = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
+
+            if(document.getElementById('l1-weight')) document.getElementById('l1-weight').innerText = fmt.format(totalWeight / 1000);
+            if(document.getElementById('l1-qty')) document.getElementById('l1-qty').innerText = fmtInt.format(totalQty);
+            if(document.getElementById('l1-mat')) document.getElementById('l1-mat').innerText = fmtInt.format(uniqueMats.size);
+
+            renderHorizontalBarChart('sloc12L1Chart', 'sloc12L1', slocMap, totalWeight, 'Sloc Weight');
+            if (currentDrilldownCustomer) {
+                const matData = customerMaterialData[currentDrilldownCustomer] || {};
+                renderDrilldownChart('customer12L1Chart', 'customer12L1', matData, currentDrilldownCustomer);
+            } else {
+                renderCustomerChart('customer12L1Chart', 'customer12L1', customerMap, totalWeight);
+            }
+        }
+        
+        function renderCustomerChart(id, name, dataMap, total) {
+             const canvas = document.getElementById(id);
+            if(!canvas) return;
+            const ctx = canvas.getContext('2d');
+            if (chartInstances[name]) chartInstances[name].destroy();
+            const entries = Object.entries(dataMap).sort((a, b) => b[1] - a[1]);
+            const labels = entries.map(e => e[0]);
+            const data = entries.map(e => e[1] / 1000);
+            canvas.classList.add('cursor-pointer-chart');
+            chartInstances[name] = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels,
+                    datasets: [{ label: 'Weight', data, backgroundColor: '#3b82f6', borderRadius: 6, barPercentage: 0.7, clip: false }]
+                },
+                options: {
+                    indexAxis: 'y', 
+                    responsive: true, 
+                    maintainAspectRatio: false,
+                    layout: { padding: { right: 130, top: 20, bottom: 20, left: 20 } },
+                    onClick: (e, elements) => {
+                        if (elements.length > 0) {
+                            const index = elements[0].index;
+                            const customerName = labels[index];
+                            currentDrilldownCustomer = customerName;
+                            document.getElementById('btn-back-customer').classList.remove('hidden');
+                            document.getElementById('customer-chart-title').innerText = `${customerName} - Materials`;
+                            calculate12L1Metrics(); 
+                        }
+                    },
+                    onHover: (event, chartElement) => {
+                        event.native.target.style.cursor = chartElement[0] ? 'pointer' : 'default';
+                    },
+                    plugins: { 
+                        legend: { display: false }, 
+                        datalabels: { 
+                            anchor: 'end', align: 'right', clamp: false, clip: false,
+                            formatter: (v, ctx) => {
+                                const raw = entries[ctx.dataIndex][1];
+                                return `${v.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits:2})} T (${total>0 ? ((raw/total)*100).toFixed(2) : 0}%)`;
+                            }, 
+                            font: {size: 11, weight: 'bold'}
+                        } 
+                    },
+                    scales: { x: { display: false, graceful: '40%' }, y: { grid: { display: false } } }
+                }
+            });
+        }
+
+        function renderDrilldownChart(id, name, dataMap, customerName) {
+            const canvas = document.getElementById(id);
+            if(!canvas) return;
+            const ctx = canvas.getContext('2d');
+            if (chartInstances[name]) chartInstances[name].destroy();
+            const entries = Object.entries(dataMap).sort((a, b) => b[1] - a[1]);
+            const customerTotal = entries.reduce((acc, curr) => acc + curr[1], 0);
+            const labels = entries.map(e => e[0]);
+            const data = entries.map(e => e[1] / 1000);
+            canvas.classList.remove('cursor-pointer-chart'); 
+            chartInstances[name] = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels,
+                    datasets: [{ label: 'Weight', data, backgroundColor: '#10b981', borderRadius: 6, barPercentage: 0.7, clip: false }]
+                },
+                options: {
+                    indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+                    layout: { padding: { right: 130, top: 20, bottom: 20, left: 20 } },
+                    plugins: { 
+                        legend: { display: false }, 
+                        datalabels: { 
+                            anchor: 'end', align: 'right', clamp: false, clip: false,
+                            formatter: (v, ctx) => {
+                                const raw = entries[ctx.dataIndex][1];
+                                return `${v.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits:2})} T (${customerTotal>0 ? ((raw/customerTotal)*100).toFixed(2) : 0}%)`;
+                            }, 
+                            font: {size: 11, weight: 'bold'}
+                        } 
+                    },
+                    scales: { x: { display: false, graceful: '40%' }, y: { grid: { display: false } } }
+                }
+            });
+        }
+
+        async function fetchWithRetry(fn, retries = 3) {
+            for (let i = 0; i < retries; i++) {
+                try { return await fn(); } 
+                catch (error) { if (i === retries - 1) throw error; await new Promise(r => setTimeout(r, 1000)); }
+            }
+        }
+
+        async function startDataSync() {
+            const modal = document.getElementById('loading-modal');
+            if(modal) modal.classList.remove('hidden');
+            
+            dbData = { '12L1': [], 'Aging': [], 'Area': [], 'Storage': [] };
+            
+            let tablesCompleted = 0;
+            const totalTables = TABLE_NAMES.length;
+            window.updateTableCount(0, totalTables);
+            window.updateProgress(0, 100, "Initializing...");
+
+            try {
+                if (!_sbClient) throw new Error("Supabase Client Not Initialized");
+
+                await fetchWithRetry(() => _sbClient.from('Aging').select('*', { count: 'exact', head: true }).limit(1));
+                window.updateStatus(true, 'Connected');
+                
+                const totalEstimatedRows = { value: 0 };
+                let totalRowsLoaded = 0;
+                
+                const promises = TABLE_NAMES.map(async name => {
+                    let { count } = await _sbClient.from(name).select('*', { count: 'exact', head: true });
+                    totalEstimatedRows.value += (count || 1000);
+                    
+                    let allRows = [];
+                    let offset = 0, hasMore = true;
+                    while(hasMore) {
+                        const { data, error } = await _sbClient.from(name).select('*').range(offset, offset + CHUNK_SIZE - 1);
+                        if (error || !data || data.length === 0) break;
+                        allRows.push(...data);
+                        offset += CHUNK_SIZE;
+                        totalRowsLoaded += data.length;
+                        window.updateProgress(totalRowsLoaded, totalEstimatedRows.value, name);
+                        if(data.length < CHUNK_SIZE) hasMore = false;
+                    }
+                    
+                    tablesCompleted++;
+                    window.updateTableCount(tablesCompleted, totalTables);
+                    return allRows;
+                });
+
+                const results = await Promise.all(promises);
+                TABLE_NAMES.forEach((name, i) => dbData[name] = results[i]);
+
+                setTimeout(() => {
+                    window.updateProgress(100, 100, "Processing Data...");
+                    determineColumnMappings();
+                    initAgingFilters();
+                    initStorageFilters();
+                    calculateStorageMetrics();
+                    calculate12L1Metrics(); 
+                    if(modal) modal.classList.add('hidden');
+                    window.updateStatus(true, `Synced (${totalRowsLoaded.toLocaleString()} rows)`);
+                }, 500);
+
+            } catch (err) {
+                console.error(err);
+                window.showErrorState("Connection Failed: " + (err.message || 'Unknown Error'));
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            if(window.Chart && window.ChartDataLabels) {
+                Chart.register(ChartDataLabels);
+                Chart.defaults.font.family = "'Sarabun', sans-serif";
+                Chart.defaults.color = '#475569';
+            }
+            
+            if (typeof supabase !== 'undefined') {
+                _sbClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+                window.updateStatus(true, 'Initializing...');
+                setTimeout(startDataSync, 500);
+            } else {
+                window.showErrorState("Supabase Library Missing");
+            }
+
+            document.addEventListener('click', (e) => {
+                ['month', 'period', 'status', 'sloc', 'storage-sloc', 'groupSale'].forEach(id => {
+                    const el = document.getElementById(`container-${id}`);
+                    const dropdown = document.getElementById(`dropdown-${id}`);
+                    if (el && dropdown && !el.contains(e.target)) dropdown.classList.add('hidden');
+                });
+            });
+        });
+    </script>
+</body>
+</html>
