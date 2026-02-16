@@ -222,7 +222,7 @@
                     <!-- Table -->
                     <div class="bg-white rounded-2xl shadow-lg p-6 mb-8">
                         <div class="flex justify-between items-center mb-6">
-                            <h3 class="text-xl font-black text-slate-800">Detailed Inventory</h3>
+                            <h3 class="text-xl font-black text-slate-800">Detailed Inventory (Top 10 by Weight)</h3>
                             <div class="flex items-center gap-3">
                                 <!-- Pagination Controls -->
                                 <button onclick="changePage(-1)" class="bg-slate-100 hover:bg-slate-200 text-slate-600 px-3 py-1.5 rounded-lg text-xs font-bold border border-slate-300 transition disabled:opacity-50" id="btn-prev">Previous</button>
@@ -251,6 +251,10 @@
                                         <th class="px-6 py-3 border-r border-slate-700 align-top">
                                             Batch
                                             <input type="text" placeholder="Search Batch..." class="th-search-input" onkeyup="updateTableSearch('batch', this.value)">
+                                        </th>
+                                        <!-- NEW QTY COLUMN -->
+                                        <th class="px-6 py-3 text-right border-r border-slate-700 align-top">
+                                            Qty
                                         </th>
                                         <th class="px-6 py-3 text-right border-r border-slate-700 align-top">
                                             Weight (KG)
@@ -453,7 +457,7 @@
         var selectedFilters = { month: new Set(), period: new Set(), status: new Set(), sloc: new Set(), groupSale: new Set() };
         var tableSearch = { hu: '', matCode: '', desc: '', batch: '', status: '' };
         var currentPage = 1;
-        var rowsPerPage = 100;
+        var rowsPerPage = 10; // Changed to 10
         var currentFilteredData = [];
         
         var agingSlocLabels = {}; 
@@ -842,6 +846,17 @@
                 return true;
             });
             
+            // Auto-Sort by Weight Descending for Top 10 view
+            currentFilteredData.sort((a, b) => {
+                let wA = getVal(a, 'weight');
+                let wB = getVal(b, 'weight');
+                if (typeof wA === 'string') wA = parseFloat(wA.replace(/,/g, ''));
+                if (typeof wB === 'string') wB = parseFloat(wB.replace(/,/g, ''));
+                if (isNaN(wA)) wA = 0;
+                if (isNaN(wB)) wB = 0;
+                return wB - wA;
+            });
+            
             currentPage = 1; // Reset to first page on filter change
             calculateAgingMetrics(currentFilteredData);
             renderDetailedTable(); // Pagination handled here
@@ -920,6 +935,10 @@
                 const hu = getVal(row, 'hu') || '-';
                 const matCode = getVal(row, 'matCode') || '-';
                 
+                let qRaw = getVal(row, 'qty');
+                let q = typeof qRaw === 'number' ? qRaw : (typeof qRaw === 'string' ? parseFloat(qRaw.replace(/,/g, '')) : 0);
+                if (isNaN(q)) q = 0;
+
                 let wRaw = getVal(row, 'weight');
                 let w = typeof wRaw === 'number' ? wRaw : (typeof wRaw === 'string' ? parseFloat(wRaw.replace(/,/g, '')) : 0);
                 if (isNaN(w)) w = 0;
@@ -930,13 +949,14 @@
                         <td class="px-6 py-4 font-bold text-slate-800">${matCode}</td>
                         <td class="px-6 py-4 text-slate-500 text-sm font-semibold max-w-xs truncate" title="${desc}">${desc}</td>
                         <td class="px-6 py-4 text-slate-500 font-semibold">${batch}</td>
+                        <td class="px-6 py-4 text-right font-bold text-slate-700">${q.toLocaleString()}</td>
                         <td class="px-6 py-4 text-right font-black text-amber-600">${w.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
                         <td class="px-6 py-4"><span class="px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wide ${String(status).toLowerCase() === 'blocked' ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-600'}">${status}</span></td>
                     </tr>`;
             });
 
             const tbBody = document.getElementById('detailedInventoryTableBody');
-            if(tbBody) tbBody.innerHTML = tableHtml || '<tr><td colspan="6" class="px-6 py-8 text-center text-slate-400 italic">No data found matching criteria.</td></tr>';
+            if(tbBody) tbBody.innerHTML = tableHtml || '<tr><td colspan="7" class="px-6 py-8 text-center text-slate-400 italic">No data found matching criteria.</td></tr>';
             
             // Update Stats
             const dCount = document.getElementById('detailed-count');
