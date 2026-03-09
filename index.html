@@ -46,9 +46,15 @@
         .multiselect-dropdown { max-height: 250px; overflow-y: auto; scrollbar-width: thin; }
         .multiselect-dropdown::-webkit-scrollbar { width: 6px; }
         .multiselect-dropdown::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 3px; }
-        .table-container { max-height: 600px; overflow-y: auto; scrollbar-width: thin; }
+        .table-container { height: 70vh; min-height: 400px; overflow-y: scroll; overflow-x: auto; scrollbar-width: thin; scrollbar-color: #94a3b8 #f1f5f9; }
+        .table-container::-webkit-scrollbar { width: 8px; height: 8px; }
+        .table-container::-webkit-scrollbar-track { background: #f1f5f9; }
+        .table-container::-webkit-scrollbar-thumb { background-color: #94a3b8; border-radius: 4px; }
         .card-progress { transition: width 0.5s ease-in-out; }
         .cursor-pointer-chart { cursor: pointer; }
+        .monthly-view-btn { background: #f8fafc; border-color: #e2e8f0; color: #64748b; }
+        .monthly-view-btn:hover { border-color: #f59e0b; color: #d97706; }
+        .active-monthly-btn { background: #fef3c7 !important; border-color: #f59e0b !important; color: #b45309 !important; font-weight: 900 !important; }
 
         /* Custom Input for Table Header */
         .th-search-input {
@@ -194,6 +200,28 @@
                         </div>
                     </div>
 
+                    <!-- Chart: Monthly Comparison -->
+                    <div class="bg-white rounded-2xl shadow-lg p-6 mb-8">
+                        <div class="flex flex-wrap justify-between items-center mb-6 gap-3">
+                            <div>
+                                <h3 class="text-xl font-black text-slate-800">Monthly Comparison (Tons)</h3>
+                                <p class="text-xs text-slate-400 font-semibold mt-1">เฉพาะรายการที่มีค่า Age Day (ไม่รวม Active "-")</p>
+                                <div class="flex items-center gap-3 mt-2">
+                                    <span class="flex items-center gap-1 text-[11px] font-bold text-emerald-600"><span class="text-base leading-none">▼</span> ลดลง (ดีขึ้น)</span>
+                                    <span class="flex items-center gap-1 text-[11px] font-bold text-red-500"><span class="text-base leading-none">▲</span> เพิ่มขึ้น (แย่ลง)</span>
+                                    <span class="text-[11px] text-slate-400 font-medium">เทียบกับเดือนก่อนหน้า (MoM)</span>
+                                </div>
+                            </div>
+                            <div class="flex gap-2 items-center">
+                                <span class="text-xs font-bold text-slate-500 uppercase tracking-wide">แสดงตาม:</span>
+                                <button onclick="setMonthlyView('groupSale')" id="monthly-btn-groupSale" class="monthly-view-btn active-monthly-btn px-3 py-1.5 rounded-lg text-xs font-bold border transition-all">Group Sale</button>
+                                <button onclick="setMonthlyView('groupProduct')" id="monthly-btn-groupProduct" class="monthly-view-btn px-3 py-1.5 rounded-lg text-xs font-bold border transition-all bg-slate-50 border-slate-200 text-slate-500 hover:border-amber-400 hover:text-amber-600">Group Product</button>
+                                <button onclick="setMonthlyView('total')" id="monthly-btn-total" class="monthly-view-btn px-3 py-1.5 rounded-lg text-xs font-bold border transition-all bg-slate-50 border-slate-200 text-slate-500 hover:border-amber-400 hover:text-amber-600">Total Only</button>
+                            </div>
+                        </div>
+                        <div class="relative h-[500px] w-full"><canvas id="monthlyComparisonChart"></canvas></div>
+                    </div>
+
                     <!-- Charts: Group Sale -->
                     <div class="bg-white rounded-2xl shadow-lg p-6 mb-8">
                         <h3 class="text-xl font-black text-slate-800 mb-6">Group Sale (Tons)</h3>
@@ -221,18 +249,66 @@
 
                     <!-- Table -->
                     <div class="bg-white rounded-2xl shadow-lg p-6 mb-8">
-                        <div class="flex justify-between items-center mb-6">
-                            <h3 class="text-xl font-black text-slate-800">Detailed Inventory (Top 10 by Weight)</h3>
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-xl font-black text-slate-800">Detailed Inventory</h3>
                             <div class="flex items-center gap-3">
+                                <!-- Rows per page -->
+                                <label class="text-xs font-bold text-slate-400">แสดง</label>
+                                <select onchange="changeRowsPerPage(this.value)" class="text-xs font-bold text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-amber-400">
+                                    <option value="50">50</option>
+                                    <option value="100" selected>100</option>
+                                    <option value="200">200</option>
+                                    <option value="500">500</option>
+                                </select>
+                                <label class="text-xs font-bold text-slate-400">แถว/หน้า</label>
+                                <div class="w-px h-5 bg-slate-200"></div>
                                 <!-- Pagination Controls -->
-                                <button onclick="changePage(-1)" class="bg-slate-100 hover:bg-slate-200 text-slate-600 px-3 py-1.5 rounded-lg text-xs font-bold border border-slate-300 transition disabled:opacity-50" id="btn-prev">Previous</button>
+                                <button onclick="changePage(-1)" class="bg-slate-100 hover:bg-slate-200 text-slate-600 px-3 py-1.5 rounded-lg text-xs font-bold border border-slate-300 transition disabled:opacity-50" id="btn-prev">&#8592; Prev</button>
                                 <span id="page-indicator" class="text-xs font-bold text-slate-500">Page 1 of 1</span>
-                                <button onclick="changePage(1)" class="bg-slate-100 hover:bg-slate-200 text-slate-600 px-3 py-1.5 rounded-lg text-xs font-bold border border-slate-300 transition disabled:opacity-50" id="btn-next">Next</button>
-                                
-                                <span id="detailed-count" class="text-xs font-black bg-slate-100 text-slate-600 px-3 py-1.5 rounded-lg border border-slate-200 ml-2">0 Rows</span>
+                                <button onclick="changePage(1)" class="bg-slate-100 hover:bg-slate-200 text-slate-600 px-3 py-1.5 rounded-lg text-xs font-bold border border-slate-300 transition disabled:opacity-50" id="btn-next">Next &#8594;</button>
+                                <span id="detailed-count" class="text-xs font-black bg-amber-50 text-amber-700 px-3 py-1.5 rounded-lg border border-amber-200 ml-1">0 Rows</span>
                             </div>
                         </div>
-                        <div class="table-container border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+
+                        <!-- Remark Legend -->
+                        <div class="mb-5 rounded-xl border border-amber-200 bg-amber-50 p-4">
+                            <div class="flex items-center gap-2 mb-3">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-amber-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                <span class="text-xs font-black text-amber-700 uppercase tracking-wider">คำอธิบาย Remark</span>
+                            </div>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                <div class="flex items-start gap-3 bg-white rounded-lg px-3 py-2 border border-amber-100 shadow-sm">
+                                    <div class="flex gap-1.5 flex-shrink-0 mt-0.5">
+                                        <span class="inline-block px-2 py-0.5 rounded text-[11px] font-black bg-orange-100 text-orange-700 border border-orange-200">Pipe&amp;CH</span>
+                                        <span class="inline-block px-2 py-0.5 rounded text-[11px] font-black bg-slate-100 text-slate-600 border border-slate-200">C1</span>
+                                    </div>
+                                    <span class="text-xs text-slate-600 font-semibold leading-relaxed">สภาพสินค้ามีปัญหาจากการจัดเก็บ</span>
+                                </div>
+                                <div class="flex items-start gap-3 bg-white rounded-lg px-3 py-2 border border-amber-100 shadow-sm">
+                                    <div class="flex gap-1.5 flex-shrink-0 mt-0.5">
+                                        <span class="inline-block px-2 py-0.5 rounded text-[11px] font-black bg-orange-100 text-orange-700 border border-orange-200">Pipe&amp;CH</span>
+                                        <span class="inline-block px-2 py-0.5 rounded text-[11px] font-black bg-slate-100 text-slate-600 border border-slate-200">C2</span>
+                                    </div>
+                                    <span class="text-xs text-slate-600 font-semibold leading-relaxed">สภาพสินค้ามีปัญหาจากการผลิต/วัตถุดิบ</span>
+                                </div>
+                                <div class="flex items-start gap-3 bg-white rounded-lg px-3 py-2 border border-amber-100 shadow-sm">
+                                    <div class="flex gap-1.5 flex-shrink-0 mt-0.5">
+                                        <span class="inline-block px-2 py-0.5 rounded text-[11px] font-black bg-blue-100 text-blue-700 border border-blue-200">HS&amp;PL&amp;FB&amp;SE</span>
+                                        <span class="inline-block px-2 py-0.5 rounded text-[11px] font-black bg-slate-100 text-slate-600 border border-slate-200">C1</span>
+                                    </div>
+                                    <span class="text-xs text-slate-600 font-semibold leading-relaxed">สภาพสินค้ามีปัญหา</span>
+                                </div>
+                                <div class="flex items-start gap-3 bg-white rounded-lg px-3 py-2 border border-amber-100 shadow-sm">
+                                    <div class="flex gap-1.5 flex-shrink-0 mt-0.5">
+                                        <span class="inline-block px-2 py-0.5 rounded text-[11px] font-black bg-blue-100 text-blue-700 border border-blue-200">HS&amp;PL&amp;FB&amp;SE</span>
+                                        <span class="inline-block px-2 py-0.5 rounded text-[11px] font-black bg-slate-100 text-slate-600 border border-slate-200">C2</span>
+                                    </div>
+                                    <span class="text-xs text-slate-600 font-semibold leading-relaxed">คำสั่ง เช่น รอคัด รอตรวจสอบ</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="table-container border border-slate-200 rounded-xl shadow-sm">
                             <table class="min-w-full text-sm text-left">
                                 <thead class="text-xs text-white uppercase bg-slate-800 sticky top-0 z-10 font-bold tracking-wider">
                                     <tr>
@@ -252,16 +328,16 @@
                                             Batch
                                             <input type="text" placeholder="Search Batch..." class="th-search-input" onkeyup="updateTableSearch('batch', this.value)">
                                         </th>
-                                        <!-- NEW QTY COLUMN -->
-                                        <th class="px-6 py-3 text-right border-r border-slate-700 align-top">
-                                            Qty
-                                        </th>
                                         <th class="px-6 py-3 text-right border-r border-slate-700 align-top">
                                             Weight (KG)
                                         </th>
                                         <th class="px-6 py-3 align-top">
                                             Status
                                             <input type="text" placeholder="Search Status..." class="th-search-input" onkeyup="updateTableSearch('status', this.value)">
+                                        </th>
+                                        <th class="px-6 py-3 align-top border-l border-slate-700">
+                                            Remark
+                                            <input type="text" placeholder="Search Remark..." class="th-search-input" onkeyup="updateTableSearch('remark', this.value)">
                                         </th>
                                     </tr>
                                 </thead>
@@ -343,6 +419,20 @@
             <!-- 12L1 TAB -->
             <div id="content-12l1" class="tab-content hidden animate-fade-in pb-8">
                  <div class="sticky top-0 z-20 bg-slate-50/95 backdrop-blur-sm px-6 py-4 mb-6">
+                     <!-- 12L1 Filter -->
+                    <div class="bg-white rounded-2xl shadow-lg p-4 border border-slate-100 mb-4">
+                        <div class="flex justify-between items-center mb-3">
+                            <h3 class="text-xs font-black text-slate-400 uppercase tracking-wide flex items-center gap-2">Filters</h3>
+                            <button onclick="clearL1Filters()" class="text-xs text-red-500 hover:text-red-700 font-bold underline">Clear</button>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div class="relative group" id="container-l1month">
+                                <label class="block text-xs font-bold text-slate-500 mb-2 uppercase tracking-wide">Month</label>
+                                <button onclick="toggleDropdown('l1month')" id="btn-l1month" class="w-full bg-slate-50 hover:bg-white border-2 border-slate-200 hover:border-amber-400 text-slate-700 text-sm font-bold rounded-xl text-left p-3 flex justify-between items-center"><span class="truncate">Select Months...</span></button>
+                                <div id="dropdown-l1month" class="hidden absolute top-full left-0 w-full bg-white border border-slate-200 rounded-xl shadow-xl z-50 mt-2 multiselect-dropdown p-2"></div>
+                            </div>
+                        </div>
+                    </div>
                      <!-- 12L1 Metrics Cards -->
                      <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                         <div class="bg-white rounded-2xl shadow-lg p-6 border-l-8 border-blue-500">
@@ -455,9 +545,9 @@
         // Filters & Pagination State
         var storageFilters = { sloc: new Set() };
         var selectedFilters = { month: new Set(), period: new Set(), status: new Set(), sloc: new Set(), groupSale: new Set() };
-        var tableSearch = { hu: '', matCode: '', desc: '', batch: '', status: '' };
+        var tableSearch = { hu: '', matCode: '', desc: '', batch: '', status: '', remark: '' };
         var currentPage = 1;
-        var rowsPerPage = 10; // Changed to 10
+        var rowsPerPage = 100;
         var currentFilteredData = [];
         
         var agingSlocLabels = {}; 
@@ -467,13 +557,18 @@
         
         // 12L1 Specific Globals
         var currentDrilldownCustomer = null;
-        var customerMaterialData = {}; 
+        var customerMaterialData = {};
+        var l1FilterMonth = new Set(); // 12L1 month filter
+        
+        // Monthly Comparison
+        var monthlyViewMode = 'groupSale';
+        var monthlyRawData = {}; // { month -> { groupSale -> { label -> weight }, hu -> count } }
 
         var COL_MAP = {
             weight: null, hu: null, matCode: null, 
             groupSale: null, groupProduct: null, productType: null,
             sloc: null, ageDay: null, month: null, status: null,
-            desc: null, batch: null, qty: null, day: null,
+            desc: null, batch: null, qty: null, day: null, remark: null,
             areaCapacity: null, storageWeight: null,
             areaSloc: null, storageSloc: null, 
             areaGate: null, storageGate: null,
@@ -502,13 +597,25 @@
                 if (sidebar.classList.contains('collapsed')) {
                     sidebar.classList.remove('w-64');
                     sidebar.classList.add('w-20');
-                    if(icon) icon.setAttribute('d', 'M9 5l7 7-7 7'); 
+                    // BUG FIX: querySelector('path') on the <svg> element, not setAttribute on svg
+                    if(icon) { const p = icon.querySelector('path'); if(p) p.setAttribute('d', 'M9 5l7 7-7 7'); }
                 } else {
                     sidebar.classList.remove('w-20');
                     sidebar.classList.add('w-64');
-                    if(icon) icon.setAttribute('d', 'M15 19l-7-7 7-7'); 
+                    if(icon) { const p = icon.querySelector('path'); if(p) p.setAttribute('d', 'M15 19l-7-7 7-7'); }
                 }
             }
+        };
+
+        window.setMonthlyView = function(mode) {
+            monthlyViewMode = mode;
+            document.querySelectorAll('.monthly-view-btn').forEach(b => {
+                b.classList.remove('active-monthly-btn');
+                b.style.background = ''; b.style.borderColor = ''; b.style.color = '';
+            });
+            const active = document.getElementById(`monthly-btn-${mode}`);
+            if (active) active.classList.add('active-monthly-btn');
+            renderMonthlyComparisonChart(monthlyRawData);
         };
 
         window.switchTab = function(tabName) {
@@ -593,20 +700,43 @@
         window.toggleCheckbox = function(div, id, val) {
             const cb = div.querySelector('input');
             cb.checked = !cb.checked;
-            if (id === 'storage-sloc') { cb.checked ? storageFilters.sloc.add(val) : storageFilters.sloc.delete(val); }
-            else { cb.checked ? selectedFilters[id].add(val) : selectedFilters[id].delete(val); }
+            if (id === 'storage-sloc') {
+                cb.checked ? storageFilters.sloc.add(val) : storageFilters.sloc.delete(val);
+            } else if (id === 'l1month') {
+                cb.checked ? l1FilterMonth.add(val) : l1FilterMonth.delete(val);
+            } else {
+                cb.checked ? selectedFilters[id].add(val) : selectedFilters[id].delete(val);
+            }
             
-            const btn = document.querySelector(`#btn-${id} span`);
-            const count = id === 'storage-sloc' ? storageFilters.sloc.size : selectedFilters[id].size;
-            btn.innerText = count === 0 ? `Select ${id.replace('storage-', '')}...` : `${count} Selected`;
+            const btn = document.querySelector('#btn-' + id + ' span');
+            const count = id === 'storage-sloc' ? storageFilters.sloc.size
+                        : id === 'l1month' ? l1FilterMonth.size
+                        : selectedFilters[id].size;
+            const labelMap = { 'month': 'Months', 'period': 'Periods', 'status': 'Status', 'sloc': 'Sloc', 'groupSale': 'Group', 'storage-sloc': 'Sloc', 'l1month': 'Months' };
+            const labelText = labelMap[id] || id;
+            if(btn) btn.innerText = count === 0 ? 'Select ' + labelText + '...' : count + ' Selected';
 
             clearTimeout(filterTimeout);
             filterTimeout = setTimeout(() => {
-                if(id.startsWith('storage')) calculateStorageMetrics();
+                if (id.startsWith('storage')) calculateStorageMetrics();
+                else if (id === 'l1month') { currentDrilldownCustomer = null; calculate12L1Metrics(); }
                 else applyAgingFilters();
             }, 300);
         };
         
+        window.clearL1Filters = function() {
+            l1FilterMonth.clear();
+            document.querySelectorAll('#dropdown-l1month input').forEach(c => c.checked = false);
+            const btn = document.querySelector('#btn-l1month span');
+            if (btn) btn.innerText = 'Select Months...';
+            currentDrilldownCustomer = null;
+            const backBtn = document.getElementById('btn-back-customer');
+            if (backBtn) backBtn.classList.add('hidden');
+            const title = document.getElementById('customer-chart-title');
+            if (title) title.innerText = 'Customer Weight (Tons)';
+            calculate12L1Metrics();
+        };
+
         window.clearStorageFilters = function() {
             storageFilters.sloc.clear();
             document.querySelectorAll('#dropdown-storage-sloc input').forEach(c => c.checked = false);
@@ -647,7 +777,23 @@
             }
         };
 
+        window.changeRowsPerPage = function(val) {
+            rowsPerPage = parseInt(val, 10) || 100;
+            currentPage = 1;
+            renderDetailedTable();
+        };
+
         // --- INTERNAL HELPERS ---
+        function escapeHtml(s) {
+            if (s === null || s === undefined) return '';
+            return String(s)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
         function cleanStr(s) {
             if (s === null || s === undefined) return '-';
             const str = String(s).trim();
@@ -707,6 +853,7 @@
             COL_MAP.desc = findKeyInRow(agingRow, 'Material Description', 'Description', 'description');
             COL_MAP.batch = findKeyInRow(agingRow, 'Batch', 'batch');
             COL_MAP.qty = findKeyInRow(agingRow, 'Qty', 'qty', 'Stock');
+            COL_MAP.remark = findKeyInRow(agingRow, 'Remark', 'remark', 'REMARK', 'Remarks', 'Note', 'Notes', 'หมายเหตุ');
             
             // Area Columns
             const areaRow = dbData['Area'][0] || {};
@@ -728,21 +875,28 @@
             // 12L1 Columns
             const l1Row = dbData['12L1'][0] || {};
             COL_MAP.l1Customer = findKeyInRow(l1Row, 'Customer', 'customer', 'Customer Name', 'Sold-to', 'Name', 'ชื่อลูกค้า');
+            COL_MAP.l1Month = findKeyInRow(l1Row, 'Month', 'month', 'MONTH');
             
             console.log("Column Mapping:", COL_MAP);
         }
 
         // Fixed Function Name: renderMultiSelect (CamelCase)
         function renderMultiSelect(id, values, labelMap = {}) {
-            const dropdown = document.getElementById(`dropdown-${id}`);
+            const dropdown = document.getElementById('dropdown-' + id);
             if(!dropdown) return;
             if (values.length === 0) { dropdown.innerHTML = '<div class="p-3 text-xs text-slate-400 italic text-center">No data</div>'; return; }
             dropdown.innerHTML = values.map(val => {
-                const isSelected = (id === 'storage-sloc') ? storageFilters.sloc.has(val) : selectedFilters[id].has(val);
-                return `<div class="flex items-center p-3 hover:bg-slate-50 cursor-pointer" onclick="toggleCheckbox(this, '${id}', '${val}')">
-                    <input type="checkbox" ${isSelected ? 'checked' : ''} class="w-5 h-5 text-amber-500 rounded mr-3 pointer-events-none">
-                    <span class="text-sm font-bold text-slate-700 pointer-events-none">${labelMap[val] || val}</span>
-                </div>`;
+                let isSelected;
+                if (id === 'storage-sloc') isSelected = storageFilters.sloc.has(val);
+                else if (id === 'l1month') isSelected = l1FilterMonth.has(val);
+                else isSelected = (selectedFilters[id] ? selectedFilters[id].has(val) : false);
+                const safeId = escapeHtml(id);
+                const safeVal = escapeHtml(String(val));
+                const label = escapeHtml(labelMap[val] || val);
+                return '<div class="flex items-center p-3 hover:bg-slate-50 cursor-pointer" onclick="toggleCheckbox(this,\'' + safeId + '\',\'' + safeVal + '\')">'
+                    + '<input type="checkbox" ' + (isSelected ? 'checked' : '') + ' class="w-5 h-5 text-amber-500 rounded mr-3 pointer-events-none">'
+                    + '<span class="text-sm font-bold text-slate-700 pointer-events-none">' + label + '</span>'
+                    + '</div>';
             }).join('');
         }
 
@@ -842,24 +996,65 @@
                 if (tableSearch.desc && !String(getVal(row, 'desc') || '').toLowerCase().includes(tableSearch.desc)) return false;
                 if (tableSearch.batch && !String(getVal(row, 'batch') || '').toLowerCase().includes(tableSearch.batch)) return false;
                 if (tableSearch.status && !String(getVal(row, 'status') || '').toLowerCase().includes(tableSearch.status)) return false;
+                if (tableSearch.remark && !String(getVal(row, 'remark') || '').toLowerCase().includes(tableSearch.remark)) return false;
 
                 return true;
-            });
-            
-            // Auto-Sort by Weight Descending for Top 10 view
-            currentFilteredData.sort((a, b) => {
-                let wA = getVal(a, 'weight');
-                let wB = getVal(b, 'weight');
-                if (typeof wA === 'string') wA = parseFloat(wA.replace(/,/g, ''));
-                if (typeof wB === 'string') wB = parseFloat(wB.replace(/,/g, ''));
-                if (isNaN(wA)) wA = 0;
-                if (isNaN(wB)) wB = 0;
-                return wB - wA;
             });
             
             currentPage = 1; // Reset to first page on filter change
             calculateAgingMetrics(currentFilteredData);
             renderDetailedTable(); // Pagination handled here
+            refreshAgingDropdowns(currentFilteredData); // Cascading filter update
+        }
+
+        // Re-render aging dropdowns based on currently filtered data (cascading filter)
+        function refreshAgingDropdowns(filteredData) {
+            const months = new Set();
+            const statuses = new Set();
+            const groupSales = new Set();
+            const slocSet = new Set();
+            const newSlocLabels = {};
+
+            filteredData.forEach(row => {
+                const month = getVal(row, 'month');
+                if (month) months.add(month);
+                const status = getVal(row, 'status');
+                if (status) statuses.add(status);
+                const gs = getVal(row, 'groupSale');
+                if (gs) groupSales.add(gs);
+                const slocRaw = getVal(row, 'sloc');
+                if (slocRaw) {
+                    const norm = normalizeSloc(slocRaw);
+                    slocSet.add(norm);
+                    if (!newSlocLabels[norm]) newSlocLabels[norm] = String(slocRaw).trim();
+                }
+            });
+
+            // Only update dropdowns that aren't actively filtering (to show what's still available)
+            renderMultiSelectCascade('month', Array.from(months).sort(), {}, selectedFilters.month);
+            renderMultiSelectCascade('status', Array.from(statuses).sort(), {}, selectedFilters.status);
+            renderMultiSelectCascade('groupSale', Array.from(groupSales).sort(), {}, selectedFilters.groupSale);
+            renderMultiSelectCascade('sloc', Array.from(slocSet).sort(), newSlocLabels, selectedFilters.sloc);
+            // Period stays static — it's derived, not a raw column value
+        }
+
+        // Like renderMultiSelect but preserves checked state for active filters and marks unavailable ones
+        function renderMultiSelectCascade(id, availableValues, labelMap, activeSet) {
+            const dropdown = document.getElementById('dropdown-' + id);
+            if (!dropdown) return;
+            if (availableValues.length === 0) {
+                dropdown.innerHTML = '<div class="p-3 text-xs text-slate-400 italic text-center">No data</div>';
+                return;
+            }
+            dropdown.innerHTML = availableValues.map(val => {
+                const isSelected = activeSet.has(val);
+                const safeVal = escapeHtml(String(val));
+                const label = escapeHtml(labelMap[val] || val);
+                return '<div class="flex items-center p-3 hover:bg-slate-50 cursor-pointer" onclick="toggleCheckbox(this,\'' + id + '\',\'' + safeVal + '\')">'
+                    + '<input type="checkbox" ' + (isSelected ? 'checked' : '') + ' class="w-5 h-5 text-amber-500 rounded mr-3 pointer-events-none">'
+                    + '<span class="text-sm font-bold text-slate-700 pointer-events-none">' + label + '</span>'
+                    + '</div>';
+            }).join('');
         }
 
         function calculateAgingMetrics(data) {
@@ -867,6 +1062,7 @@
             const uniqueMatCodes = new Set();
             const groupSaleMap = {}, groupProductMap = {}, productTypeMap = {}, activeStatusMap = {}, slocMap = {};
             const periodMap = { '< 1 Year': 0, '> 1 Year': 0, '> 2 Years': 0, '> 3 Years': 0 };
+            const monthlyMap = {}; // { month -> { groupSale: {label->w}, groupProduct: {label->w}, totalWeight, totalHU } }
 
             for (let i = 0; i < data.length; i++) {
                 const row = data[i];
@@ -875,7 +1071,8 @@
                 if (isNaN(w)) w = 0;
                 totalWeight += w;
 
-                if (getVal(row, 'hu') || Object.keys(row).length > 0) totalHU++;
+                const huVal = getVal(row, 'hu');
+                if (huVal && String(huVal).trim() !== '' && String(huVal).trim() !== '-') totalHU++;
                 const matCode = getVal(row, 'matCode');
                 if (matCode) uniqueMatCodes.add(matCode);
 
@@ -905,6 +1102,18 @@
                 if (!activeStatusMap[grpSale]) activeStatusMap[grpSale] = { active: 0, nonActive: 0 };
                 if (isActive) activeStatusMap[grpSale].active += w;
                 else activeStatusMap[grpSale].nonActive += w;
+
+                // Monthly data aggregation — เฉพาะแถวที่ Age Day ≠ "-" (Non-Active เท่านั้น)
+                if (!isActive) {
+                    const monthVal = getVal(row, 'month');
+                    const monthKey = monthVal ? String(monthVal).trim() : 'Unknown';
+                    if (!monthlyMap[monthKey]) monthlyMap[monthKey] = { groupSale: {}, groupProduct: {}, totalWeight: 0, totalHU: 0 };
+                    monthlyMap[monthKey].totalWeight += w;
+                    const huVal2 = getVal(row, 'hu');
+                    if (huVal2 && String(huVal2).trim() !== '' && String(huVal2).trim() !== '-') monthlyMap[monthKey].totalHU++;
+                    monthlyMap[monthKey].groupSale[grpSale] = (monthlyMap[monthKey].groupSale[grpSale] || 0) + w;
+                    monthlyMap[monthKey].groupProduct[grpProd] = (monthlyMap[monthKey].groupProduct[grpProd] || 0) + w;
+                }
             }
 
             const fmt = new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -920,53 +1129,319 @@
             renderActiveStatusChart('activeStatusChart', 'activeStatus', activeStatusMap, totalWeight);
             renderHorizontalBarChart('slocChart', 'sloc', slocMap, totalWeight, 'Sloc');
             renderHorizontalBarChart('agingPeriodChart', 'agingPeriod', periodMap, totalWeight, 'Aging Period');
+            monthlyRawData = monthlyMap;
+            renderMonthlyComparisonChart(monthlyMap);
+        }
+
+        function renderMonthlyComparisonChart(monthlyMap) {
+            const canvas = document.getElementById('monthlyComparisonChart');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            if (chartInstances['monthly']) chartInstances['monthly'].destroy();
+
+            // Sort months — try numeric sort (e.g. "202401") else string sort
+            const sortedMonths = Object.keys(monthlyMap).filter(m => m !== 'Unknown').sort((a, b) => {
+                const na = Number(a), nb = Number(b);
+                return (!isNaN(na) && !isNaN(nb)) ? na - nb : a.localeCompare(b);
+            });
+            if (monthlyMap['Unknown']) sortedMonths.push('Unknown');
+            if (sortedMonths.length === 0) return;
+
+            const mode = monthlyViewMode;
+            const palette = ['#f59e0b','#3b82f6','#10b981','#ef4444','#8b5cf6','#ec4899','#0ea5e9','#fb923c','#22c55e','#a855f7'];
+
+            // --- Pre-compute MoM % change helpers ---
+            // totalWeightArr[i] = total weight (Tons) for sortedMonths[i]
+            const totalWeightArr = sortedMonths.map(m => monthlyMap[m].totalWeight / 1000);
+            const totalHUArr     = sortedMonths.map(m => monthlyMap[m].totalHU);
+
+            // Returns "▼ 12.5%" / "▲ 8.3%" / "–" badge string
+            const momPct = (arr, idx) => {
+                if (idx === 0 || arr[idx - 1] === 0) return null;
+                const prev = arr[idx - 1], curr = arr[idx];
+                const pct = ((curr - prev) / prev) * 100;
+                return pct;
+            };
+            const fmtMom = (pct) => {
+                if (pct === null) return '';
+                const sign = pct <= 0 ? '▼' : '▲';
+                return `${sign} ${Math.abs(pct).toFixed(1)}%`;
+            };
+            // Color for MoM: decrease = green (good), increase = red (bad) for aging context
+            const momColor = (pct) => {
+                if (pct === null) return '#94a3b8';
+                return pct <= 0 ? '#10b981' : '#ef4444';
+            };
+
+            // Per-group MoM: groupArr[grp][i] = value (Tons)
+            const buildGroupMom = (groupKey) => {
+                const allGroups = new Set();
+                sortedMonths.forEach(m => Object.keys(monthlyMap[m][groupKey] || {}).forEach(g => allGroups.add(g)));
+                const groups = Array.from(allGroups).sort();
+                const groupArr = {};
+                groups.forEach(grp => {
+                    groupArr[grp] = sortedMonths.map(m => (monthlyMap[m][groupKey][grp] || 0) / 1000);
+                });
+                return { groups, groupArr };
+            };
+
+            let datasets = [];
+
+            if (mode === 'total') {
+                datasets = [
+                    {
+                        type: 'bar',
+                        label: 'Total Weight (Tons)',
+                        data: totalWeightArr,
+                        backgroundColor: sortedMonths.map((_, i) => {
+                            const p = momPct(totalWeightArr, i);
+                            if (p === null) return '#f59e0b';
+                            return p <= 0 ? 'rgba(16,185,129,0.75)' : 'rgba(239,68,68,0.75)';
+                        }),
+                        borderColor: sortedMonths.map((_, i) => {
+                            const p = momPct(totalWeightArr, i);
+                            if (p === null) return '#d97706';
+                            return p <= 0 ? '#059669' : '#dc2626';
+                        }),
+                        borderWidth: 2,
+                        borderRadius: 6,
+                        yAxisID: 'yWeight',
+                        order: 2,
+                        datalabels: {
+                            anchor: 'end', align: 'top',
+                            font: { size: 10, weight: 'bold' },
+                            color: (ctx) => momColor(momPct(totalWeightArr, ctx.dataIndex)),
+                            formatter: (v, ctx) => {
+                                const i = ctx.dataIndex;
+                                const p = momPct(totalWeightArr, i);
+                                const val = v > 0 ? v.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '0';
+                                return p === null ? val : `${val}\n${fmtMom(p)}`;
+                            }
+                        }
+                    },
+                    {
+                        type: 'line',
+                        label: 'Total HU',
+                        data: totalHUArr,
+                        borderColor: '#3b82f6',
+                        backgroundColor: 'rgba(59,130,246,0.1)',
+                        borderWidth: 2.5,
+                        pointRadius: 5,
+                        pointBackgroundColor: (ctx) => {
+                            const p = momPct(totalHUArr, ctx.dataIndex);
+                            return p === null ? '#3b82f6' : (p <= 0 ? '#10b981' : '#ef4444');
+                        },
+                        tension: 0.3,
+                        fill: false,
+                        yAxisID: 'yHU',
+                        order: 1,
+                        datalabels: {
+                            anchor: 'top', align: 'top',
+                            font: { size: 10, weight: 'bold' },
+                            color: (ctx) => momColor(momPct(totalHUArr, ctx.dataIndex)),
+                            formatter: (v, ctx) => {
+                                const i = ctx.dataIndex;
+                                const p = momPct(totalHUArr, i);
+                                return p === null ? `${v}` : `${v}\n${fmtMom(p)}`;
+                            }
+                        }
+                    }
+                ];
+            } else {
+                const groupKey = mode;
+                const { groups, groupArr } = buildGroupMom(groupKey);
+
+                datasets = groups.map((grp, i) => ({
+                    type: 'bar',
+                    label: grp,
+                    data: groupArr[grp],
+                    backgroundColor: palette[i % palette.length],
+                    borderRadius: 4,
+                    stack: 'weight',
+                    yAxisID: 'yWeight',
+                    order: 2,
+                    datalabels: {
+                        display: (context) => {
+                            const v = context.dataset.data[context.dataIndex];
+                            const monthTotal = totalWeightArr[context.dataIndex];
+                            return v > 0 && monthTotal > 0 && (v / monthTotal) >= 0.05;
+                        },
+                        anchor: 'center', align: 'center',
+                        color: '#fff',
+                        font: { size: 9, weight: 'bold' },
+                        formatter: (v, context) => {
+                            if (v <= 0) return '';
+                            const i = context.dataIndex;
+                            const p = momPct(groupArr[grp], i);
+                            const val = v.toLocaleString(undefined, {minimumFractionDigits: 1, maximumFractionDigits: 1});
+                            return p === null ? val : `${val}\n${fmtMom(p)}`;
+                        }
+                    }
+                }));
+
+                // Total line with MoM %
+                datasets.push({
+                    type: 'line',
+                    label: 'Total Weight',
+                    data: totalWeightArr,
+                    borderColor: '#334155',
+                    backgroundColor: 'transparent',
+                    borderWidth: 2,
+                    pointRadius: 5,
+                    pointBackgroundColor: (ctx) => {
+                        const p = momPct(totalWeightArr, ctx.dataIndex);
+                        return p === null ? '#334155' : (p <= 0 ? '#10b981' : '#ef4444');
+                    },
+                    tension: 0.3,
+                    fill: false,
+                    yAxisID: 'yWeight',
+                    order: 1,
+                    datalabels: {
+                        anchor: 'end', align: 'top',
+                        font: { size: 10, weight: 'bold' },
+                        color: (ctx) => momColor(momPct(totalWeightArr, ctx.dataIndex)),
+                        formatter: (v, ctx) => {
+                            if (v <= 0) return '';
+                            const i = ctx.dataIndex;
+                            const p = momPct(totalWeightArr, i);
+                            const val = v.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                            return p === null ? val : `${val}\n${fmtMom(p)}`;
+                        }
+                    }
+                });
+            }
+
+            chartInstances['monthly'] = new Chart(ctx, {
+                data: { labels: sortedMonths, datasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    layout: { padding: { top: 45, right: 20, bottom: 10, left: 10 } },
+                    interaction: { mode: 'index', intersect: false },
+                    scales: {
+                        x: {
+                            stacked: mode !== 'total',
+                            grid: { display: false },
+                            ticks: { font: { size: 11, weight: 'bold' }, color: '#475569' }
+                        },
+                        yWeight: {
+                            type: 'linear',
+                            position: 'left',
+                            stacked: mode !== 'total',
+                            grid: { color: 'rgba(203,213,225,0.5)' },
+                            ticks: {
+                                font: { size: 11 }, color: '#64748b',
+                                callback: v => v.toLocaleString(undefined, {maximumFractionDigits: 1}) + ' T'
+                            },
+                            title: { display: true, text: 'Weight (Tons)', font: { size: 11, weight: 'bold' }, color: '#94a3b8' }
+                        },
+                        ...(mode === 'total' ? {
+                            yHU: {
+                                type: 'linear',
+                                position: 'right',
+                                grid: { display: false },
+                                ticks: { font: { size: 11 }, color: '#3b82f6', callback: v => v.toLocaleString() },
+                                title: { display: true, text: 'HU Count', font: { size: 11, weight: 'bold' }, color: '#3b82f6' }
+                            }
+                        } : {})
+                    },
+                    plugins: {
+                        legend: {
+                            display: true, position: 'top',
+                            labels: { font: { size: 11, weight: 'bold' }, padding: 16, usePointStyle: true }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: (item) => {
+                                    const v = item.raw;
+                                    const i = item.dataIndex;
+                                    const isHU = item.dataset.label === 'Total HU';
+                                    const arr = isHU ? totalHUArr
+                                                     : (item.dataset.label === 'Total Weight' || item.dataset.label === 'Total Weight (Tons)')
+                                                       ? totalWeightArr
+                                                       : null;
+                                    let line = isHU
+                                        ? ` ${item.dataset.label}: ${Number(v).toLocaleString()} units`
+                                        : ` ${item.dataset.label}: ${Number(v).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} T`;
+                                    if (arr) {
+                                        const p = momPct(arr, i);
+                                        if (p !== null) line += `  (${fmtMom(p)})`;
+                                    } else if (mode !== 'total') {
+                                        // group-level MoM from groupArr
+                                        const grp = item.dataset.label;
+                                        const gKey = mode;
+                                        const gArr = sortedMonths.map(m => (monthlyMap[m][gKey][grp] || 0) / 1000);
+                                        const p = momPct(gArr, i);
+                                        if (p !== null) line += `  (${fmtMom(p)})`;
+                                    }
+                                    return line;
+                                }
+                            }
+                        },
+                        datalabels: {}
+                    }
+                }
+            });
         }
 
         function renderDetailedTable() {
             const start = (currentPage - 1) * rowsPerPage;
-            const end = start + rowsPerPage;
+            const end = Math.min(start + rowsPerPage, currentFilteredData.length);
             const pageData = currentFilteredData.slice(start, end);
             
-            let tableHtml = '';
-            pageData.forEach(row => {
-                const desc = getVal(row, 'desc') || '-';
-                const batch = getVal(row, 'batch') || '-';
-                const status = getVal(row, 'status') || '-';
-                const hu = getVal(row, 'hu') || '-';
-                const matCode = getVal(row, 'matCode') || '-';
-                
-                let qRaw = getVal(row, 'qty');
-                let q = typeof qRaw === 'number' ? qRaw : (typeof qRaw === 'string' ? parseFloat(qRaw.replace(/,/g, '')) : 0);
-                if (isNaN(q)) q = 0;
+            const rows = pageData.map(row => {
+                const desc    = escapeHtml(getVal(row, 'desc') || '-');
+                const batch   = escapeHtml(getVal(row, 'batch') || '-');
+                const status  = escapeHtml(getVal(row, 'status') || '-');
+                const hu      = escapeHtml(getVal(row, 'hu') || '-');
+                const matCode = escapeHtml(getVal(row, 'matCode') || '-');
+                const remarkRaw = getVal(row, 'remark');
+                const remarkStr = (remarkRaw !== null && remarkRaw !== undefined && String(remarkRaw).trim() !== '') ? String(remarkRaw).trim() : '';
+                const remark  = escapeHtml(remarkStr);
 
                 let wRaw = getVal(row, 'weight');
                 let w = typeof wRaw === 'number' ? wRaw : (typeof wRaw === 'string' ? parseFloat(wRaw.replace(/,/g, '')) : 0);
                 if (isNaN(w)) w = 0;
+                const wFmt = w.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
 
-                tableHtml += `
-                    <tr class="hover:bg-slate-50 border-b border-slate-50 transition">
-                        <td class="px-6 py-4 font-mono text-sm text-slate-600 font-bold">${hu}</td>
-                        <td class="px-6 py-4 font-bold text-slate-800">${matCode}</td>
-                        <td class="px-6 py-4 text-slate-500 text-sm font-semibold max-w-xs truncate" title="${desc}">${desc}</td>
-                        <td class="px-6 py-4 text-slate-500 font-semibold">${batch}</td>
-                        <td class="px-6 py-4 text-right font-bold text-slate-700">${q.toLocaleString()}</td>
-                        <td class="px-6 py-4 text-right font-black text-amber-600">${w.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
-                        <td class="px-6 py-4"><span class="px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wide ${String(status).toLowerCase() === 'blocked' ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-600'}">${status}</span></td>
-                    </tr>`;
+                const isBlocked = status.toLowerCase() === 'blocked';
+                const statusClass = isBlocked ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-600';
+                const remarkCell = remark
+                    ? '<span class="px-2 py-0.5 rounded bg-slate-100 text-slate-600 text-xs font-bold">' + remark + '</span>'
+                    : '<span class="text-slate-300">\u2014</span>';
+
+                return '<tr class="hover:bg-slate-50 border-b border-slate-50 transition">'
+                    + '<td class="px-6 py-4 font-mono text-sm text-slate-600 font-bold">' + hu + '</td>'
+                    + '<td class="px-6 py-4 font-bold text-slate-800">' + matCode + '</td>'
+                    + '<td class="px-6 py-4 text-slate-500 text-sm font-semibold max-w-xs truncate" title="' + desc + '">' + desc + '</td>'
+                    + '<td class="px-6 py-4 text-slate-500 font-semibold">' + batch + '</td>'
+                    + '<td class="px-6 py-4 text-right font-black text-amber-600">' + wFmt + '</td>'
+                    + '<td class="px-6 py-4"><span class="px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wide ' + statusClass + '">' + status + '</span></td>'
+                    + '<td class="px-6 py-4">' + remarkCell + '</td>'
+                    + '</tr>';
             });
 
             const tbBody = document.getElementById('detailedInventoryTableBody');
-            if(tbBody) tbBody.innerHTML = tableHtml || '<tr><td colspan="7" class="px-6 py-8 text-center text-slate-400 italic">No data found matching criteria.</td></tr>';
+            if (tbBody) {
+                tbBody.innerHTML = rows.length > 0
+                    ? rows.join('')
+                    : '<tr><td colspan="7" class="px-6 py-8 text-center text-slate-400 italic">No data found matching criteria.</td></tr>';
+            }
             
-            // Update Stats
+            // Update Stats — show "showing X–Y of Z"
+            const total = currentFilteredData.length;
+            const showingStart = total === 0 ? 0 : start + 1;
+            const showingEnd = end;
             const dCount = document.getElementById('detailed-count');
-            if(dCount) dCount.innerText = `${currentFilteredData.length.toLocaleString()} Total`;
+            if (dCount) dCount.innerText = total === 0
+                ? '0 Rows'
+                : showingStart + '\u2013' + showingEnd + ' / ' + total.toLocaleString() + ' Rows';
             
             // Update Pagination UI
-            const maxPage = Math.ceil(currentFilteredData.length / rowsPerPage) || 1;
-            document.getElementById('page-indicator').innerText = `Page ${currentPage} of ${maxPage}`;
+            const maxPage = Math.ceil(total / rowsPerPage) || 1;
+            document.getElementById('page-indicator').innerText = 'Page ' + currentPage + ' of ' + maxPage;
             document.getElementById('btn-prev').disabled = currentPage === 1;
-            document.getElementById('btn-next').disabled = currentPage === maxPage;
+            document.getElementById('btn-next').disabled = currentPage >= maxPage;
         }
 
         // --- CHART FUNCTIONS ---
@@ -983,7 +1458,8 @@
                 chart.data.datasets.forEach((dataset, i) => {
                     const meta = chart.getDatasetMeta(i);
                     meta.data.forEach((element, index) => {
-                        const model = element.tooltipPosition();
+                        // BUG FIX: Use getCenterPoint() instead of tooltipPosition() for arc center
+                        const center = element.getCenterPoint();
                         const midAngle = element.startAngle + (element.endAngle - element.startAngle) / 2;
                         
                         // Calculate outside point
@@ -994,8 +1470,8 @@
                         // Only draw if value is visible (not 0)
                         if (dataset.data[index] > 0) {
                              ctx.beginPath();
-                             ctx.moveTo(model.x, model.y); // Center of Arc
-                             ctx.lineTo(x2, y2); // Label Position approx
+                             ctx.moveTo(center.x, center.y);
+                             ctx.lineTo(x2, y2);
                              ctx.stroke();
                         }
                     });
@@ -1049,7 +1525,7 @@
                         } 
                     },
                     scales: { 
-                        x: { display: false, graceful: '40%' }, 
+                        x: { display: false }, 
                         y: { grid: { display: false } } 
                     }
                 }
@@ -1090,83 +1566,271 @@
         }
 
         // --- UPDATED ACTIVE STATUS CHART ---
-        // Enhanced to handle small values (labels outside/inside dynamically)
-        
         function renderActiveStatusChart(id, name, dataMap, total) {
             const canvas = document.getElementById(id);
             if(!canvas) return;
             const ctx = canvas.getContext('2d');
             if (chartInstances[name]) chartInstances[name].destroy();
-            
-            const labels = Object.keys(dataMap).sort((a, b) => (dataMap[b].active+dataMap[b].nonActive) - (dataMap[a].active+dataMap[a].nonActive));
-            
+
+            const labels = Object.keys(dataMap).sort((a, b) =>
+                (dataMap[b].active + dataMap[b].nonActive) - (dataMap[a].active + dataMap[a].nonActive)
+            );
+
+            const rowTotals = labels.map(l => (dataMap[l].active + dataMap[l].nonActive) / 1000);
+            const MIN_PCT_FOR_INSIDE = 0.10; // ≥10% of row = show inside
+
+            const makeDatalabels = (dsIndex) => ({
+                display: (context) => {
+                    const v = context.dataset.data[context.dataIndex];
+                    if (!v || v <= 0) return false;
+                    const rt = rowTotals[context.dataIndex];
+                    const pct = rt > 0 ? v / rt : 0;
+                    // Inside: always show. Outside: only show if value > 0
+                    return true;
+                },
+                formatter: (v, context) => {
+                    if (!v || v <= 0) return '';
+                    const pct = total > 0 ? ((v * 1000 / total) * 100) : 0;
+                    return `${v.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} T\n(${pct.toFixed(1)}%)`;
+                },
+                anchor: (context) => {
+                    const v = context.dataset.data[context.dataIndex];
+                    const rt = rowTotals[context.dataIndex];
+                    const pct = rt > 0 ? v / rt : 0;
+                    return pct < MIN_PCT_FOR_INSIDE ? 'end' : 'center';
+                },
+                align: (context) => {
+                    const v = context.dataset.data[context.dataIndex];
+                    const rt = rowTotals[context.dataIndex];
+                    const pct = rt > 0 ? v / rt : 0;
+                    if (pct < MIN_PCT_FOR_INSIDE) {
+                        // Dataset 0 (Active/Green) is left segment → push label right with gap
+                        // Dataset 1 (Non-Active/Red) is right segment → push further right
+                        return 'right';
+                    }
+                    return 'center';
+                },
+                color: (context) => {
+                    const v = context.dataset.data[context.dataIndex];
+                    const rt = rowTotals[context.dataIndex];
+                    const pct = rt > 0 ? v / rt : 0;
+                    if (pct < MIN_PCT_FOR_INSIDE) {
+                        // outside label color matches dataset color for readability
+                        return dsIndex === 0 ? '#065f46' : '#991b1b';
+                    }
+                    return '#ffffff';
+                },
+                backgroundColor: (context) => {
+                    const v = context.dataset.data[context.dataIndex];
+                    const rt = rowTotals[context.dataIndex];
+                    const pct = rt > 0 ? v / rt : 0;
+                    if (pct < MIN_PCT_FOR_INSIDE) {
+                        // badge background for outside labels so they never overlap bar text
+                        return dsIndex === 0 ? 'rgba(209,250,229,0.9)' : 'rgba(254,226,226,0.9)';
+                    }
+                    return 'transparent';
+                },
+                borderRadius: (context) => {
+                    const v = context.dataset.data[context.dataIndex];
+                    const rt = rowTotals[context.dataIndex];
+                    const pct = rt > 0 ? v / rt : 0;
+                    return pct < MIN_PCT_FOR_INSIDE ? 4 : 0;
+                },
+                padding: (context) => {
+                    const v = context.dataset.data[context.dataIndex];
+                    const rt = rowTotals[context.dataIndex];
+                    const pct = rt > 0 ? v / rt : 0;
+                    return pct < MIN_PCT_FOR_INSIDE ? { top: 2, bottom: 2, left: 4, right: 4 } : 0;
+                },
+                font: { size: 10, weight: 'bold' },
+                // Stagger the outside labels vertically: ds0 above center, ds1 below center
+                offset: (context) => {
+                    const v = context.dataset.data[context.dataIndex];
+                    const rt = rowTotals[context.dataIndex];
+                    const pct = rt > 0 ? v / rt : 0;
+                    if (pct < MIN_PCT_FOR_INSIDE) {
+                        // Both are pushed right from bar end; use textAlign offset to separate vertically
+                        return 4;
+                    }
+                    return 0;
+                },
+                // Vertical offset via textAlign trick: use 'start'/'end' align on the y-axis
+                // We rely on Chart.js datalabels positioning — stagger using 'rotation'
+                rotation: 0,
+                clamp: false,
+                clip: false,
+                // Use labels.value sub-config to separate two outside labels vertically
+                labels: {
+                    value: {
+                        // Main label — positioned correctly by anchor/align above
+                    }
+                }
+            });
+
+            // Custom plugin: draws connector lines from bar edge to outside labels, and staggers ds0/ds1 labels
+            const activeChartPlugin = {
+                id: 'activeOutsideLabels',
+                afterDatasetsDraw(chart) {
+                    const cCtx = chart.ctx;
+                    if (!chart.data.datasets || chart.data.datasets.length < 2) return;
+
+                    const ds0 = chart.getDatasetMeta(0);
+                    const ds1 = chart.getDatasetMeta(1);
+
+                    cCtx.save();
+                    cCtx.font = 'bold 10px Sarabun, sans-serif';
+                    cCtx.textBaseline = 'middle';
+
+                    labels.forEach((label, i) => {
+                        const active = chart.data.datasets[0].data[i] || 0;
+                        const nonActive = chart.data.datasets[1].data[i] || 0;
+                        const rt = rowTotals[i];
+                        if (rt <= 0) return;
+
+                        const activePct = active / rt;
+                        const nonActivePct = nonActive / rt;
+
+                        // Get bar element positions
+                        const el0 = ds0.data[i]; // Active bar
+                        const el1 = ds1.data[i]; // Non-Active bar
+
+                        // Only draw outside labels for narrow segments
+                        const drawOutside = (el, v, pct, dsIdx, barEnd) => {
+                            if (!el || v <= 0 || pct >= MIN_PCT_FOR_INSIDE) return;
+                            const totalPct = total > 0 ? ((v * 1000 / total) * 100) : 0;
+                            const line1 = `${v.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} T`;
+                            const line2 = `(${totalPct.toFixed(1)}%)`;
+
+                            const barY = el.y; // center y of bar element
+                            // Stagger: ds0 draws text above bar center, ds1 below
+                            const yOffset = dsIdx === 0 ? -10 : 10;
+                            const textX = barEnd + 8;
+                            const textY = barY + yOffset;
+
+                            const color = dsIdx === 0 ? '#065f46' : '#991b1b';
+                            const bgColor = dsIdx === 0 ? 'rgba(209,250,229,0.92)' : 'rgba(254,226,226,0.92)';
+
+                            // Measure text
+                            const maxW = Math.max(cCtx.measureText(line1).width, cCtx.measureText(line2).width);
+                            const boxW = maxW + 8, boxH = 28;
+
+                            // Draw badge
+                            cCtx.fillStyle = bgColor;
+                            cCtx.beginPath();
+                            cCtx.roundRect(textX, textY - boxH / 2, boxW, boxH, 4);
+                            cCtx.fill();
+
+                            // Draw text
+                            cCtx.fillStyle = color;
+                            cCtx.textAlign = 'left';
+                            cCtx.fillText(line1, textX + 4, textY - 6);
+                            cCtx.fillText(line2, textX + 4, textY + 7);
+
+                            // Connector line from bar edge to badge
+                            cCtx.strokeStyle = color;
+                            cCtx.lineWidth = 1;
+                            cCtx.setLineDash([3, 2]);
+                            cCtx.beginPath();
+                            cCtx.moveTo(barEnd, barY);
+                            cCtx.lineTo(textX, textY);
+                            cCtx.stroke();
+                            cCtx.setLineDash([]);
+                        };
+
+                        // Get the rightmost x of the full stacked bar (end of ds1)
+                        const fullBarEnd = el1 ? (el1.x + el1.width / 2) : 0;
+
+                        drawOutside(el0, active, activePct, 0, fullBarEnd);
+                        drawOutside(el1, nonActive, nonActivePct, 1, fullBarEnd);
+                    });
+
+                    cCtx.restore();
+                }
+            };
+
             chartInstances[name] = new Chart(ctx, {
                 type: 'bar',
                 data: {
                     labels,
                     datasets: [
-                        { 
-                            label: 'Active', 
-                            data: labels.map(l=>dataMap[l].active/1000), 
-                            backgroundColor: '#10b981', 
-                            borderRadius: 4, 
-                            stack: '1', 
+                        {
+                            label: 'Active',
+                            data: labels.map(l => dataMap[l].active / 1000),
+                            backgroundColor: '#10b981',
+                            borderRadius: 4,
+                            stack: '1',
+                            clip: false,
+                            datalabels: {
+                                display: (context) => {
+                                    const v = context.dataset.data[context.dataIndex];
+                                    if (!v || v <= 0) return false;
+                                    const rt = rowTotals[context.dataIndex];
+                                    return rt > 0 && (v / rt) >= MIN_PCT_FOR_INSIDE;
+                                },
+                                formatter: (v) => {
+                                    if (!v || v <= 0) return '';
+                                    const pct = total > 0 ? ((v * 1000 / total) * 100) : 0;
+                                    return `${v.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} T\n(${pct.toFixed(1)}%)`;
+                                },
+                                anchor: 'center', align: 'center',
+                                color: '#fff',
+                                font: { size: 10, weight: 'bold' },
+                                clamp: true, clip: false
+                            }
                         },
-                        { 
-                            label: 'Non-Active', 
-                            data: labels.map(l=>dataMap[l].nonActive/1000), 
-                            backgroundColor: '#ef4444', 
-                            borderRadius: 4, 
-                            stack: '1', 
+                        {
+                            label: 'Non-Active',
+                            data: labels.map(l => dataMap[l].nonActive / 1000),
+                            backgroundColor: '#ef4444',
+                            borderRadius: 4,
+                            stack: '1',
+                            clip: false,
+                            datalabels: {
+                                display: (context) => {
+                                    const v = context.dataset.data[context.dataIndex];
+                                    if (!v || v <= 0) return false;
+                                    const rt = rowTotals[context.dataIndex];
+                                    return rt > 0 && (v / rt) >= MIN_PCT_FOR_INSIDE;
+                                },
+                                formatter: (v) => {
+                                    if (!v || v <= 0) return '';
+                                    const pct = total > 0 ? ((v * 1000 / total) * 100) : 0;
+                                    return `${v.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} T\n(${pct.toFixed(1)}%)`;
+                                },
+                                anchor: 'center', align: 'center',
+                                color: '#fff',
+                                font: { size: 10, weight: 'bold' },
+                                clamp: true, clip: false
+                            }
                         }
                     ]
                 },
                 options: {
-                    indexAxis: 'y', 
-                    responsive: true, 
+                    indexAxis: 'y',
+                    responsive: true,
                     maintainAspectRatio: false,
-                    layout: { padding: { right: 50, top: 30, left: 20 } },
-                    scales: { 
-                        x: { stacked: true, display: false }, 
-                        y: { stacked: true, grid: { display: false } } 
+                    layout: { padding: { right: 200, top: 30, left: 20, bottom: 10 } },
+                    scales: {
+                        x: { stacked: true, display: false },
+                        y: { stacked: true, grid: { display: false } }
                     },
-                    plugins: { 
+                    plugins: {
+                        legend: { display: true, position: 'top' },
                         tooltip: {
                             callbacks: {
-                                label: function(context) {
-                                    let label = context.dataset.label || '';
-                                    if (label) {
-                                        label += ': ';
-                                    }
-                                    if (context.parsed.x !== null) {
-                                        label += context.parsed.x.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' Tons';
-                                    }
-                                    return label;
+                                label: (item) => {
+                                    const v = item.raw;
+                                    const rt = rowTotals[item.dataIndex];
+                                    const pct = rt > 0 ? (v / rt * 100).toFixed(1) : '0.0';
+                                    const totalPct = total > 0 ? (v * 1000 / total * 100).toFixed(1) : '0.0';
+                                    return ` ${item.dataset.label}: ${v.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} T  (${pct}% of row | ${totalPct}% of total)`;
                                 }
                             }
                         },
-                        legend: { display: true, position: 'top', align: 'end' },
-                        datalabels: { 
-                            display: (context) => {
-                                const value = context.dataset.data[context.dataIndex];
-                                const active = context.chart.data.datasets[0].data[context.dataIndex];
-                                const nonActive = context.chart.data.datasets[1].data[context.dataIndex];
-                                const rowTotal = active + nonActive;
-                                if (rowTotal === 0) return false;
-                                const pctOfRow = value / rowTotal;
-                                // Hide label if bar segment is too small (less than 10%)
-                                return pctOfRow > 0.10; 
-                            },
-                            formatter: (v, context) => {
-                                return v.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0});
-                            },
-                            color: '#ffffff',
-                            anchor: 'center',
-                            align: 'center',
-                            font: {size: 11, weight: 'bold'}
-                        } 
+                        datalabels: {}
                     }
-                }
+                },
+                plugins: [activeChartPlugin]
             });
         }
 
@@ -1192,7 +1856,7 @@
                     layout: { padding: { top: 60, right: 20, left: 10 } },
                     scales: { 
                         x: { stacked: true }, 
-                        y: { stacked: true, graceful: '20%' } 
+                        y: { stacked: true } 
                     },
                     plugins: { 
                         datalabels: { 
@@ -1205,18 +1869,18 @@
                                     formatter: (v, context) => {
                                         const i = context.dataIndex;
                                         const k = keys[i];
-                                        const total = dataMap[k].total;
-                                        const used = dataMap[k].used;
+                                        const capTotal = dataMap[k].total;
+                                        const capUsed = dataMap[k].used;
                                         
                                         if (context.datasetIndex === 0) {
-                                            if (used <= 0) return '';
-                                            const pct = total > 0 ? (used / total) * 100 : 0;
-                                            return `${used.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}\n(${pct.toFixed(1)}%)`;
+                                            if (capUsed <= 0) return '';
+                                            const pct = capTotal > 0 ? (capUsed / capTotal) * 100 : 0;
+                                            return `${capUsed.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}\n(${pct.toFixed(1)}%)`;
                                         }
                                         if (context.datasetIndex === 1) {
-                                            const remaining = Math.max(0, total - used);
+                                            const remaining = Math.max(0, capTotal - capUsed);
                                             if (remaining <= 0) return '';
-                                            const pct = total > 0 ? (remaining / total) * 100 : 0;
+                                            const pct = capTotal > 0 ? (remaining / capTotal) * 100 : 0;
                                             return `${remaining.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}\n(${pct.toFixed(1)}%)`;
                                         }
                                     }
@@ -1230,8 +1894,8 @@
                                         if (context.datasetIndex !== 1) return null;
                                         const i = context.dataIndex;
                                         const k = keys[i];
-                                        const total = dataMap[k].total;
-                                        return `Total: ${total.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+                                        const capTotal = dataMap[k].total;
+                                        return `Total: ${capTotal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
                                     },
                                     offset: 5
                                 }
@@ -1368,16 +2032,16 @@
             });
             
             const cardsContainer = document.getElementById('storage-area-cards');
+            // BUG FIX: hoist getStatusPriority outside sort() to avoid re-creation on every comparison
+            const getStatusPriority = (item) => {
+                const pct = item.capacity > 0 ? (item.used / item.capacity) * 100 : 0;
+                if (pct > 100) return 1;
+                if (pct > 90) return 2;
+                if (item.used > 0) return 3;
+                return 4;
+            };
             // Sort by Status: Over Capacity > Full > Normal > Empty
             displayCards.sort((a, b) => {
-                const getStatusPriority = (item) => {
-                    const pct = item.capacity > 0 ? (item.used / item.capacity) * 100 : 0;
-                    if (pct > 100) return 1; // เกินพิกัด (Red)
-                    if (pct > 90) return 2;  // เต็ม (Amber)
-                    if (item.used > 0) return 3; // ปกติ (Emerald)
-                    return 4; // ว่าง (Slate)
-                };
-
                 const pA = getStatusPriority(a);
                 const pB = getStatusPriority(b);
 
@@ -1419,9 +2083,32 @@
             renderPieChart('storageProductTypeChart', 'storageProductType', productTypeMap, totalBreakdownWeight, 'Product Type');
         }
 
+        function init12L1Filters() {
+            const l1Data = dbData['12L1'] || [];
+            const months = new Set();
+            l1Data.forEach(row => {
+                const m = COL_MAP.l1Month ? row[COL_MAP.l1Month] : null;
+                if (m !== null && m !== undefined && String(m).trim() !== '') months.add(String(m).trim());
+            });
+            const sortedMonths = Array.from(months).sort((a, b) => {
+                const na = Number(a), nb = Number(b);
+                return (!isNaN(na) && !isNaN(nb)) ? na - nb : a.localeCompare(b);
+            });
+            renderMultiSelect('l1month', sortedMonths);
+        }
+
         function calculate12L1Metrics() {
             const l1Data = dbData['12L1'] || [];
             if(l1Data.length === 0) return;
+
+            // Apply month filter
+            const filteredL1 = l1FilterMonth.size > 0
+                ? l1Data.filter(row => {
+                    const m = COL_MAP.l1Month ? row[COL_MAP.l1Month] : null;
+                    const mStr = (m !== null && m !== undefined) ? String(m).trim() : '';
+                    return l1FilterMonth.has(mStr);
+                  })
+                : l1Data;
 
             let totalWeight = 0, totalQty = 0;
             const uniqueMats = new Set();
@@ -1429,7 +2116,7 @@
             const customerMap = {}; 
             customerMaterialData = {}; 
 
-            l1Data.forEach(row => {
+            filteredL1.forEach(row => {
                 let wVal = getVal(row, 'weight'); 
                 let w = typeof wVal === 'number' ? wVal : parseFloat((String(wVal).replace(/,/g, '') || '0'));
                 if (isNaN(w)) w = 0;
@@ -1511,7 +2198,7 @@
                             font: {size: 11, weight: 'bold'}
                         } 
                     },
-                    scales: { x: { display: false, graceful: '40%' }, y: { grid: { display: false } } }
+                    scales: { x: { display: false }, y: { grid: { display: false } } }
                 }
             });
         }
@@ -1546,7 +2233,7 @@
                             font: {size: 11, weight: 'bold'}
                         } 
                     },
-                    scales: { x: { display: false, graceful: '40%' }, y: { grid: { display: false } } }
+                    scales: { x: { display: false }, y: { grid: { display: false } } }
                 }
             });
         }
@@ -1607,6 +2294,7 @@
                     determineColumnMappings();
                     initAgingFilters();
                     initStorageFilters();
+                    init12L1Filters();
                     calculateStorageMetrics();
                     calculate12L1Metrics(); 
                     if(modal) modal.classList.add('hidden');
@@ -1635,7 +2323,7 @@
             }
 
             document.addEventListener('click', (e) => {
-                ['month', 'period', 'status', 'sloc', 'storage-sloc', 'groupSale'].forEach(id => {
+                ['month', 'period', 'status', 'sloc', 'storage-sloc', 'groupSale', 'l1month'].forEach(id => {
                     const el = document.getElementById(`container-${id}`);
                     const dropdown = document.getElementById(`dropdown-${id}`);
                     if (el && dropdown && !el.contains(e.target)) dropdown.classList.add('hidden');
